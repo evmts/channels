@@ -322,7 +322,7 @@ SELECT player_id FROM players WHERE
 **Related Documentation:**
 - **Event Catalog:** [docs/architecture/event-types.md](architecture/event-types.md) - Complete event surface area with schemas, validation, ID derivation
 - **Implementation:** [Phase 1](./.claude/commands/1_phase_1_event_sourcing.md) - Event sourcing foundation
-- **Prior Art:** [docs/context.md](context.md) - Event sourcing patterns from PGlite, ElectricSQL, Replicache, go-nitro
+- **Prior Art:** [docs/context.md](context.md) - Event sourcing patterns from PGlite, ElectricSQL, Replicache, state channel implementations
 - **ADRs:** [ADR-0001, 0002, 0003](adrs/README.md) - Event sourcing strategy, serialization, in-memory log
 
 **Comparison:**
