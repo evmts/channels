@@ -1,111 +1,81 @@
+# Project: Event-Sourced State Channels in Zig
+
+**Building:** State channel implementation (like go-nitro) with event sourcing as core innovation. Event log = source-of-truth (vs snapshots). Enables audit trails, time-travel debugging, provable state derivation.
+
+**Reference:** `go-nitro/` dir contains go-nitro source (reference implementation). `docs/` contains PRD, architecture, planning framework.
+
+**Methodology:** Doc→Test→Code. Phases planned via prompts (`.claude/commands/N_phase_*.md`). Prompts versioned+committed. When implementation reveals issues: update prompt→regenerate code→git rebase.
+
+**Key Docs:**
+- `docs/prd.md` - Complete product requirements
+- `docs/phase-template.md` - Structure for all phases
+- `docs/adrs/0000-adrs.md` - Architectural decision records methodology
+- `.claude/commands/0_plan_phases.md` - Master planning prompt
+
 ---
-description: Use Bun instead of Node.js, npm, pnpm, or vite.
-globs: "*.ts, *.tsx, *.html, *.css, *.js, *.jsx, package.json"
-alwaysApply: false
+
+## Communication
+
+**Style:** Radio dispatcher. Brief even at expense of grammar/complete sentences. Pack max info into min text. Concise efficient communication.
+
 ---
 
-Default to using Bun instead of Node.js.
+## Bun (TypeScript/Frontend)
 
-- Use `bun <file>` instead of `node <file>` or `ts-node <file>`
-- Use `bun test` instead of `jest` or `vitest`
-- Use `bun build <file.html|file.ts|file.css>` instead of `webpack` or `esbuild`
-- Use `bun install` instead of `npm install` or `yarn install` or `pnpm install`
-- Use `bun run <script>` instead of `npm run <script>` or `yarn run <script>` or `pnpm run <script>`
-- Bun automatically loads .env, so don't use dotenv.
+Default Bun over Node.js:
+- `bun <file>` not `node`/`ts-node`
+- `bun test` not `jest`/`vitest`
+- `bun build` not `webpack`/`esbuild`
+- `bun install` not `npm`/`pnpm`/`yarn`
+- `bun run <script>` not `npm run`
+- Bun auto-loads .env (no dotenv)
 
-## APIs
+---
 
-- `Bun.serve()` supports WebSockets, HTTPS, and routes. Don't use `express`.
-- `bun:sqlite` for SQLite. Don't use `better-sqlite3`.
-- `Bun.redis` for Redis. Don't use `ioredis`.
-- `Bun.sql` for Postgres. Don't use `pg` or `postgres.js`.
-- `WebSocket` is built-in. Don't use `ws`.
-- Prefer `Bun.file` over `node:fs`'s readFile/writeFile
-- Bun.$`ls` instead of execa.
+## Zig
 
-## Testing
+**Version Issues:** Training data uses Zig 0.14, we use 0.15+. Breaking changes: I/O reader/writer interfaces, Array interface. When blocked: check std lib code in homebrew.
 
-Use `bun test` to run tests.
+**Tests:** Separate files: `foo.zig` + `foo.test.zig`. Add all tests to `root.zig` so they run.
 
-```ts#index.test.ts
-import { test, expect } from "bun:test";
+**Errors:** Always handle. Never swallow (incl allocation). Panic/unreachable only if codepath impossible.
 
-test("hello world", () => {
-  expect(1).toBe(1);
-});
-```
+---
 
-## Frontend
+## Persistence & Alignment
 
-Use HTML imports with `Bun.serve()`. Don't use `vite`. HTML imports fully support React, CSS, Tailwind.
+Prefer failing doing it our way over simpler path. Rather learn from failed attempt than try shortcut we won't use. Use learnings→improve prompt→retry clean context.
 
-Server:
+---
 
-```ts#index.ts
-import index from "./index.html"
+## Context Passing
 
-Bun.serve({
-  routes: {
-    "/": index,
-    "/api/users/:id": {
-      GET: (req) => {
-        return new Response(JSON.stringify({ id: req.params.id }));
-      },
-    },
-  },
-  // optional websocket support
-  websocket: {
-    open: (ws) => {
-      ws.send("Hello, world!");
-    },
-    message: (ws, message) => {
-      ws.send(message);
-    },
-    close: (ws) => {
-      // handle close
-    }
-  },
-  development: {
-    hmr: true,
-    console: true,
-  }
-})
-```
+Consistently create new context windows. When done: eagerly suggest prompt for next agent compressing useful context.
 
-HTML files can import .tsx, .jsx or .js files directly and Bun's bundler will transpile & bundle automatically. `<link>` tags can point to stylesheets and Bun's CSS bundler will bundle.
+**Remove:** Useless details
+**Include:** Essential context
+**Compress:** Repetitive info→specify pattern
+**Follow:** Context passing protocol on auto-compact
 
-```html#index.html
-<html>
-  <body>
-    <h1>Hello, world!</h1>
-    <script type="module" src="./frontend.tsx"></script>
-  </body>
-</html>
-```
+---
 
-With the following `frontend.tsx`:
+## TDD
 
-```tsx#frontend.tsx
-import React from "react";
+Always verify via TDD or test-after. Tests committed, drive commit history.
 
-// import .css files directly and it works
-import './index.css';
+---
 
-import { createRoot } from "react-dom/client";
+## Prompt-Driven Development
 
-const root = createRoot(document.body);
+**Prompts = Code:** Version, review, improve prompts in `.claude/commands/`
 
-export default function Frontend() {
-  return <h1>Hello, world!</h1>;
-}
+**Regeneration workflow:**
+1. Execute phase
+2. Discover issues/learnings
+3. Update prompts (planning, phase-specific)
+4. Regenerate code/tests/docs
+5. Git rebase to apply retroactively
 
-root.render(<Frontend />);
-```
+**When:** Wrong assumptions, better approach, new ADR, dep change, missed perf target
 
-Then, run index.ts
-
-```sh
-bun --hot ./index.ts
-```
-
-For more information, read the Bun API docs in `node_modules/bun-types/docs/**.md`.
+**Result:** Prompts improve over time, code regenerated from improved specs
