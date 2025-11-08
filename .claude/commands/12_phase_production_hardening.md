@@ -2,6 +2,26 @@
 
 **Meta:** P12 | Deps: All previous | Owner: Core
 
+## Zig Profiling/Optimization
+
+**Built-in:**
+- `std.testing.benchmark` - basic timing
+- `@setCold/@setHot` - branch hints
+- `@setRuntimeSafety(false)` - disable checks hot paths
+- `std.debug.print` timing manual
+- Comptime evaluation - move work to compile time
+
+**External profilers:**
+- `perf` (Linux syscalls) - official tracking uses this
+- `valgrind` - memory profiling
+- Custom instrumentation
+
+**Official tracking:** ziglang.org/perf - benchmarks every master commit (speed, mem, throughput)
+
+**Optimization:** Profile first (perf/valgrind), then: comptime, inline, SIMD, algorithm/data structure choice
+
+**Recent wins:** 5-50% wall-clock improvements (self-hosted x86_64 backend, 2025)
+
 ## Summary
 
 Prepare system for production deployment - security audit, performance optimization, monitoring, operational tooling, documentation polish. Critical for real-world usage - without hardening, system vulnerable to attacks, performance issues, operational failures. Comprehensive phase covering security, reliability, observability, deployment automation, user documentation. Not feature development - quality, security, operations focus.
@@ -97,7 +117,7 @@ pub fn initProduction(config_path: []const u8, a: Allocator) !*Node;
 
 |Risk|P|I|Mitigation|
 |--|--|--|--|
-|Critical security findings|M|Critical|Comprehensive audit, time buffer for fixes|
+|Critical security findings|M|Critical|Comprehensive audit, [fuzz testing](../docs/fuzz-tests.md), time buffer for fixes|
 |Performance regression|M|H|Continuous benchmarking, profiling|
 |Monitoring overhead|L|M|Optimize metrics collection, sampling|
 |Deploy automation failures|M|M|Extensive testing, rollback procedures|

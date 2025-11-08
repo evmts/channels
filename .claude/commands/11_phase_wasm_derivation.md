@@ -143,7 +143,7 @@ pub fn deriveState(messages: []Message, reducer_wasm: []const u8, a: Allocator) 
 |Risk|P|I|Mitigation|
 |--|--|--|--|
 |PGlite integration extremely complex|H|H|6 weeks allocated, prototype early, consider alternatives|
-|Non-determinism bugs (time/random)|M|Critical|Extensive fuzzing, sandbox enforcement, audits|
+|Non-determinism bugs (time/random)|M|Critical|Extensive [fuzzing](../docs/fuzz-tests.md), sandbox enforcement, audits|
 |Performance too slow (>10s)|M|H|Profile early, optimize hot paths, caching, WASM JIT|
 |WASM memory limits|M|M|Monitor usage, set limits, handle OOM gracefully|
 |On-chain validation expensive|M|M|Optimize reducer, use fault proofs (P12)|
