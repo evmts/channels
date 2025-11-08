@@ -4,7 +4,7 @@
 **Role:** Senior Systems Architect
 **Expertise:** Distributed systems, state channels (Nitro/Lightning/Perun), event sourcing/CQRS, Zig systems programming, WASM/deterministic computation, blockchain/smart contracts, cryptographic protocols
 
-**Task:** Generate 8-12 phase docs (`.claude/commands/N_phase_*.md`) for event-sourced state channel system in Zig, based on go-nitro architecture + event sourcing innovation.
+**Task:** Generate 8-12 phase docs (`.claude/commands/N_phase_*.md`) for event-sourced state channel system in Zig, based on state channel best practices + event sourcing innovation.
 </role-context>
 
 <objective>
@@ -17,7 +17,7 @@
 4. Identify ADRs needed
 5. Clear success criteria + validation gates
 6. Emphasize event sourcing
-7. Preserve go-nitro patterns, fix pain points
+7. Preserve proven patterns, fix pain points
 
 **Deliverables:** 8-12 phase docs, ADR identification, dependency graph, risk assessment, testing strategy
 </objective>
@@ -27,10 +27,9 @@
 
 ### Step 1: Context Review
 <required-context>
-**Core:** `@docs/prd.md` (§5.6 go-nitro patterns, §8 roadmap), `@docs/context.md`
-**Reference:** `@go-nitro/architecture.md`, `@go-nitro/docs/research-papers.md`, `@go-nitro/docs/faqs.md`, `@go-nitro/docs/user-flows/*.md`, `@docs/go-nitro-api.md`
+**Core:** `@docs/prd.md` (§5.6 state channel patterns, §8 roadmap), `@docs/context.md`
+**Reference:** State channel research papers, proven implementation patterns, op-stack documentation
 **Framework:** `@docs/phase-template.md`, `@docs/adr-template.md`, `@docs/adrs/0000-adrs.md`
-**go-nitro Code:** `/engine/engine.go`, `/protocols/interfaces.go`, `/protocols/{directfund,virtualfund}/`, `/channel/consensus_channel/`, `/.adr/`
 </required-context>
 
 ### Step 2: Identify ADRs
@@ -70,7 +69,7 @@ Checklist: Template structure, DAG deps, testable, event-sourced, measurable suc
 
 1. **Event Sourcing First:** Every phase considers: event emission, state reconstruction, event persistence, sequence validation. Phase 1 critical foundation.
 
-2. **Preserve go-nitro:** ✅ Objective/Crank (pure funcs), channel ownership, consensus channels (leader/follower), side effects separation, WaitingFor enum | ❌ Replace: snapshots→events, goroutines→async/await, strings→tagged unions, JSON→binary
+2. **Preserve Proven Patterns:** ✅ Objective/Crank (pure funcs), channel ownership, consensus channels (leader/follower), side effects separation, WaitingFor enum | ❌ Replace: snapshots→events, goroutines→async/await, strings→tagged unions, JSON→binary
 
 3. **Doc→Test→Code:** W1: Docs/ADRs/specs; W2: Test specs/failing tests/benchmarks; W3-4: Implement/refactor/doc; W5: Review/perf/demo
 
@@ -141,7 +140,7 @@ Checklist: Template structure, DAG deps, testable, event-sourced, measurable suc
 **Ex1 Summary:**
 ```markdown
 <summary>
-P1 establishes event-sourcing foundation - core innovation over go-nitro snapshots. Append-only log = source of truth with deterministic reconstruction. Critical for debuggability/auditability/time-travel. All phases build on this.
+P1 establishes event-sourcing foundation - core innovation over traditional snapshots. Append-only log = source of truth with deterministic reconstruction. Critical for debuggability/auditability/time-travel. All phases build on this.
 </summary>
 ```
 
@@ -161,7 +160,7 @@ P1 establishes event-sourcing foundation - core innovation over go-nitro snapsho
 ```markdown
 <architectural-decisions>
 1. **ADR-0011:** Proposal Ordering - Q: Order? Opts: Trust leader/Seq nums/Queue+sort. Rec: C. Why: Robust, handles OOO
-2. **ADR-0012:** Guarantee Locking - Q: When lock? Opts: Prefund/Postfund/First state. Rec: B. Why: Matches go-nitro
+2. **ADR-0012:** Guarantee Locking - Q: When lock? Opts: Prefund/Postfund/First state. Rec: B. Why: Matches proven patterns
 </architectural-decisions>
 ```
 

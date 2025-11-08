@@ -20,7 +20,7 @@
 
 ## Summary
 
-Channel state primitives: State/FixedPart/VariablePart structures, secp256k1 signatures, ABI encoding, ChannelId generation. Foundation for all protocols - without state types, cannot represent/verify channel updates. Preserves go-nitro proven model, replaces strings with tagged unions, integrates event sourcing.
+Channel state primitives: State/FixedPart/VariablePart structures, secp256k1 signatures, ABI encoding, ChannelId generation. Foundation for all protocols - without state types, cannot represent/verify channel updates. Preserves proven state channel model, replaces strings with tagged unions, integrates event sourcing.
 
 ## Objectives
 
@@ -34,8 +34,8 @@ Channel state primitives: State/FixedPart/VariablePart structures, secp256k1 sig
 
 **Done when:**
 - Types defined: State, FixedPart, VariablePart, Outcome, Signature
-- ABI encoding byte-identical to go-nitro
-- ChannelId 100% match to go-nitro vectors
+- ABI encoding byte-identical to reference implementations
+- ChannelId 100% match to test vectors
 - Signature verify + pubkey recovery 100% correct
 - State hash deterministic
 - Events emit for all ops (100% cov)
@@ -78,7 +78,7 @@ EventStore (P1)
 - Q: How compute ID?
 - Opts: A) Hash(FixedPart) | B) Random UUID | C) Hash(Participants, Nonce)
 - Rec: A (full FixedPart)
-- Why: Deterministic, go-nitro compat, prevents collisions
+- Why: Deterministic, prevents collisions, standard pattern
 - Formula: `Keccak256(abi.encode(participants, nonce, appDef, challengeDuration))`
 
 ## Data Structures
@@ -211,7 +211,7 @@ pub fn emitStateReceived(store: *EventStore, state: State, sig: Signature, from:
 
 **Integration:**
 - Full lifecycle: Create → Sign → Verify → Emit → Reconstruct
-- Cross-impl: Our encoding matches go-nitro byte-for-byte
+- Cross-impl: Our encoding matches reference implementations byte-for-byte
 
 **Benchmarks:**
 - ChannelId: <1ms
@@ -228,7 +228,7 @@ pub fn emitStateReceived(store: *EventStore, state: State, sig: Signature, from:
 
 |Risk|P|I|Mitigation|
 |--|--|--|--|
-|ABI encoding bugs|M|H|Cross-test vs go-nitro, contract vectors|
+|ABI encoding bugs|M|H|Cross-test vs reference implementations, contract vectors|
 |Sig verify wrong recovery|M|H|Test vs ethers.js, proven lib|
 |Keccak256 incorrect|L|H|Use tested lib (zabi)|
 |secp256k1 integration complex|M|M|2 days allocated, test thoroughly|
@@ -250,7 +250,7 @@ pub fn emitStateReceived(store: *EventStore, state: State, sig: Signature, from:
 
 **Phases:** P1 (Events)
 **ADRs:** 0004 (Sig), 0005 (ABI), 0006 (ChannelId)
-**External:** go-nitro `channel/state/state.go`, Ethereum ABI spec, EIP-191, secp256k1 spec
+**External:** State channel implementations, Ethereum ABI spec, EIP-191, secp256k1 spec
 
 ## Example
 

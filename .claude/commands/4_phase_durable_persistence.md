@@ -158,7 +158,7 @@ pub fn readFrom(self: *Self, offset: EventOffset) ![]Event;
 
 **Phases:** P1 (EventStore)
 **ADRs:** 0008 (RocksDB), 0009 (Snapshots), 0001 (Event Sourcing)
-**External:** RocksDB docs, go-nitro durablestore.go
+**External:** RocksDB docs, state channel persistence patterns
 
 ## Example
 

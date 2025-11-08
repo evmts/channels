@@ -17,9 +17,9 @@
 
 ## Summary
 
-Core innovation vs go-nitro: append-only event log = source-of-truth (not snapshots). Deterministic state reconstruction from events. Enables audit trails, time-travel debug, provable state derivation. Foundation - all later phases emit/replay events.
+Core innovation vs traditional snapshots: append-only event log = source-of-truth (not snapshots). Deterministic state reconstruction from events. Enables audit trails, time-travel debug, provable state derivation. Foundation - all later phases emit/replay events.
 
-**vs go-nitro:** Events → derive state (transparent, verifiable) vs snapshots (opaque)
+**vs traditional approach:** Events → derive state (transparent, verifiable) vs snapshots (opaque)
 
 ## Objectives
 
@@ -64,7 +64,7 @@ SnapshotManager: cache every N events
 
 **ADR-0001: Event Sourcing Strategy**
 - Q: How store state?
-- Opts: A) Snapshots (go-nitro) | B) Events | C) Hybrid
+- Opts: A) Snapshots (traditional) | B) Events | C) Hybrid
 - Rec: B + snapshots as optimization
 - Why: Audit trail, time-travel, transparent, debuggable vs ⚠️ reconstruct cost (mitigated cache)
 
@@ -355,7 +355,7 @@ fn benchReconstruct(b: *Benchmark) !void {
 
 - ADRs: 0001-0003 (to write)
 - Phases: P4 (RocksDB migration)
-- External: go-nitro/node/engine/store/ (snapshot approach - contrast)
+- External: State channel research papers on snapshot approaches (contrast)
 - PRD: §4.1 Event Sourcing
 
 ## Example

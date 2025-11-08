@@ -4,7 +4,7 @@
 
 ## Summary
 
-First complete protocol - DirectFund (prefund→deposit→postfund). Establishes Objective/Crank pattern (pure FSM). Critical - all protocols build on this pattern. Without DirectFund, cannot open funded channels. Preserves go-nitro Objective architecture + event sourcing integration.
+First complete protocol - DirectFund (prefund→deposit→postfund). Establishes Objective/Crank pattern (pure FSM). Critical - all protocols build on this pattern. Without DirectFund, cannot open funded channels. Preserves proven Objective architecture + event sourcing integration.
 
 ## Objectives
 
@@ -45,7 +45,7 @@ CreateChannel → Objective{Prefund} → Crank() → {SendPrefund}
 **ADR-0006: Objective/Crank Pattern**
 - Q: State machine design?
 - Opts: A) Explicit FSM | B) Flowchart | C) Actor
-- Rec: B (go-nitro flowchart)
+- Rec: B (proven flowchart pattern)
 - Why: Flexible, restartable, proven vs ⚠️ learning curve (ok worth it)
 
 **ADR-0007: Side Effect Dispatch**
@@ -165,7 +165,7 @@ pub fn createDirectFund(
 
 **Phases:** P1 (Events), P2 (State)
 **ADRs:** 0006 (Objective), 0007 (SideEffects)
-**External:** go-nitro `/protocols/directfund/`, ADR-0001 Flowchart
+**External:** State channel protocol patterns, flowchart-based FSM design
 
 ## Example
 
