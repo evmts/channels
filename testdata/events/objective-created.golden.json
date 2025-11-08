@@ -1,0 +1,16 @@
+{
+  "event_name": "objective-created",
+  "payload": {
+    "event_version": 1,
+    "timestamp_ms": 1704067200000,
+    "objective_id": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "objective_type": "DirectFund",
+    "channel_id": "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "participants": [
+      "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb0",
+      "0x8626f6940E2eb28930eFb4CeF49B2d1F2C9C1199"
+    ]
+  },
+  "canonical_json": "{\"channel_id\":\"0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"event_version\":1,\"objective_id\":\"0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"objective_type\":\"DirectFund\",\"participants\":[\"0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb0\",\"0x8626f6940E2eb28930eFb4CeF49B2d1F2C9C1199\"],\"timestamp_ms\":1704067200000}",
+  "expected_id": "computed_by_test"
+}

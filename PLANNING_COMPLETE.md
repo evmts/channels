@@ -63,7 +63,7 @@ Complete implementation plans following `docs/phase-template.md` structure:
 | 0003 | In-Memory Event Log | P1 | ArrayList → RocksDB (P4) |
 | 0004 | Signature Scheme | P2 | secp256k1 recoverable |
 | 0005 | State Encoding | P2 | Ethereum ABI-compatible |
-| 0006 | Objective/Crank Pattern | P3 | Flowchart (go-nitro) |
+| 0006 | Objective/Crank Pattern | P3 | Flowchart (proven pattern) |
 | 0007 | Side Effect Dispatch | P3 | Return for engine dispatch |
 | 0008 | Event Store Backend | P4 | RocksDB |
 | 0009 | Snapshot Frequency | P4 | Every 1000 events |
@@ -325,7 +325,6 @@ PLANNING_COMPLETE.md                    (This file)
 ## References
 
 - **PRD:** `docs/prd.md` - Complete product requirements
-- **go-nitro:** `go-nitro/` - Reference implementation
 - **Phase Template:** `docs/phase-template.md` - Document structure
 - **ADR Template:** `docs/adr-template.md` - Decision format
 - **Context:** `docs/context.md` - Project background

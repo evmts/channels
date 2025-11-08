@@ -1,0 +1,14 @@
+{
+  "event_name": "message-dropped",
+  "payload": {
+    "event_version": 1,
+    "timestamp_ms": 1704067200000,
+    "message_id": "0x9999999999999999999999999999999999999999999999999999999999999999",
+    "peer_id": "peer123",
+    "reason": "Invalid signature detected",
+    "error_code": "signature_invalid",
+    "payload_size_bytes": 256
+  },
+  "canonical_json": "{\"error_code\":\"signature_invalid\",\"event_version\":1,\"message_id\":\"0x9999999999999999999999999999999999999999999999999999999999999999\",\"payload_size_bytes\":256,\"peer_id\":\"peer123\",\"reason\":\"Invalid signature detected\",\"timestamp_ms\":1704067200000}",
+  "expected_id": "computed_by_test"
+}

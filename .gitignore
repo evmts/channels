@@ -33,9 +33,6 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 # Finder (MacOS) folder config
 .DS_Store
 
-# go-nitro reference source
-go-nitro/
-
 # Zig build artifacts
 .zig-cache/
 zig-out/

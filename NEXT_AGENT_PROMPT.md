@@ -40,7 +40,7 @@ Comprehensive phase planning for event-sourced state channels system:
 
 ### Why Phase 1 is Critical
 
-Event sourcing is **core innovation** over go-nitro:
+Event sourcing is **core innovation** for op-stack state channels:
 - Append-only event log = source of truth (not snapshots)
 - Transparent state derivation (anyone can replay events to verify)
 - Complete audit trail (time-travel debugging)
@@ -138,12 +138,12 @@ PLANNING_COMPLETE.md                 (Overall summary)
 NEXT_AGENT_PROMPT.md                (This file)
 ```
 
-**Reference Implementation:**
+**Reference Architecture:**
 ```
-go-nitro/
-├── node/engine/store/              (Store interface - snapshots approach)
-├── .adr/                           (go-nitro ADRs)
-└── architecture.md                 (Engine design)
+State channel patterns:
+├── Store interface patterns        (Traditional snapshots approach - contrast)
+├── ADR methodology                 (Architectural decisions)
+└── Engine design patterns          (Event loop, objective management)
 ```
 
 ---
@@ -195,7 +195,7 @@ go-nitro/
 
 **Remove from next context:**
 - This planning meta-discussion
-- Detailed analysis of go-nitro (captured in phase docs)
+- Detailed architecture analysis (captured in phase docs)
 - General Zig guidance (use project-specific)
 
 **Include in next context:**
@@ -207,7 +207,7 @@ go-nitro/
 **Compress:**
 - 12 phases planned → Phase 1 active, others waiting
 - 17 ADRs identified → 3 ADRs needed for Phase 1
-- Event sourcing = core innovation (vs go-nitro snapshots)
+- Event sourcing = core innovation (vs traditional snapshots)
 
 ---
 

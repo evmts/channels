@@ -1,0 +1,16 @@
+{
+  "event_name": "deposit-detected",
+  "payload": {
+    "event_version": 1,
+    "timestamp_ms": 1704067200000,
+    "channel_id": "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
+    "block_num": 12345678,
+    "tx_index": 42,
+    "tx_hash": "0xfedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210",
+    "asset": "0x0000000000000000000000000000000000000000",
+    "amount_deposited": "1000000000000000000",
+    "now_held": "1000000000000000000"
+  },
+  "canonical_json": "{\"amount_deposited\":\"1000000000000000000\",\"asset\":\"0x0000000000000000000000000000000000000000\",\"block_num\":12345678,\"channel_id\":\"0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef\",\"event_version\":1,\"now_held\":\"1000000000000000000\",\"timestamp_ms\":1704067200000,\"tx_hash\":\"0xfedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210\",\"tx_index\":42}",
+  "expected_id": "computed_by_test"
+}

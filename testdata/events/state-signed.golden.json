@@ -1,0 +1,16 @@
+{
+  "event_name": "state-signed",
+  "payload": {
+    "event_version": 1,
+    "timestamp_ms": 1704067200000,
+    "channel_id": "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
+    "turn_num": 5,
+    "state_hash": "0xabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcd",
+    "signer": "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb0",
+    "signature": "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef12",
+    "is_final": false,
+    "app_data_hash": "0x0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "canonical_json": "{\"app_data_hash\":\"0x0000000000000000000000000000000000000000000000000000000000000000\",\"channel_id\":\"0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef\",\"event_version\":1,\"is_final\":false,\"signature\":\"0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef12\",\"signer\":\"0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb0\",\"state_hash\":\"0xabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcd\",\"timestamp_ms\":1704067200000,\"turn_num\":5}",
+  "expected_id": "computed_by_test"
+}

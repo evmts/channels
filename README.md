@@ -57,13 +57,34 @@ Traditional channels store opaque state snapshots. This system stores ordered me
 
 Built for **op-stack** L2s with WASM state derivation support. Follows state channel best practices: Objective/Crank pattern, WaitingFor enumeration, multi-layered architecture. Novel: event sourcing, Zig performance, tagged unions, binary serialization.
 
-## Key Documentation
+## Documentation Map
 
-- `docs/prd.md` - Complete product requirements
-- `docs/phase-template.md` - Structure for all phases
-- `docs/adrs/` - Architectural decision records
-- `.claude/commands/0_plan_phases.md` - Master planning prompt
-- `.claude/commands/N_phase_*.md` - Individual phase prompts
+**New to the project?** Start here:
+1. This README (you are here) - Overview and quick start
+2. [docs/prd.md](docs/prd.md) - Product vision and complete requirements
+3. [docs/LEARNING_PATHS.md](docs/LEARNING_PATHS.md) - Guided reading for different roles
+4. [docs/context.md](docs/context.md) - Prior art (Nitro, Perun, Arbitrum, event sourcing patterns)
+
+**Implementing a phase?** Read these:
+- [.claude/commands/README.md](.claude/commands/README.md) - Phase roadmap and dependency graph
+- [.claude/commands/N_phase_*.md](.claude/commands/N_phase_*.md) - Your specific phase spec
+- [docs/phase-template.md](docs/phase-template.md) - What each phase section means
+- [docs/adrs/README.md](docs/adrs/README.md) - ADRs your phase creates/depends on
+- [CLAUDE.md](CLAUDE.md) - Coding conventions and workflow
+
+**Understanding architecture?** See:
+- [docs/architecture/](docs/architecture/) - Design documents and component specs
+- [docs/adrs/](docs/adrs/) - Architectural decisions with rationale
+- [docs/prd.md](docs/prd.md) §5 - System architecture overview
+
+**Writing tests?** Read:
+- [CLAUDE.md](CLAUDE.md) - TDD approach and Zig conventions
+- [docs/fuzz-tests.md](docs/fuzz-tests.md) - Zig fuzz testing guide (Linux/Docker)
+
+**Working with AI?** Check:
+- [CLAUDE.md](CLAUDE.md) - AI assistant instructions and prompt-driven methodology
+- [.claude/commands/0_plan_phases.md](.claude/commands/0_plan_phases.md) - Planning approach
+- [docs/phase-template.md](docs/phase-template.md) & [docs/adr-template.md](docs/adr-template.md) - Templates
 
 ## Getting Started
 

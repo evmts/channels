@@ -8,9 +8,15 @@
 
 **Key Docs:**
 - `docs/prd.md` - Complete product requirements
+- `docs/context.md` - Prior art and research (state channels, rollups, event sourcing)
+- `docs/LEARNING_PATHS.md` - Guided reading sequences for different personas
 - `docs/phase-template.md` - Structure for all phases
-- `docs/adrs/0000-adrs.md` - Architectural decision records methodology
+- `docs/adr-template.md` - Architectural decision record structure
+- `docs/adrs/0000-adrs.md` - ADR methodology
+- `docs/architecture/` - Design documents (event-types.md, etc.)
+- `docs/fuzz-tests.md` - Zig fuzz testing guide (Linux/Docker)
 - `.claude/commands/0_plan_phases.md` - Master planning prompt
+- `.claude/commands/README.md` - Phase index and dependency graph
 
 ---
 
