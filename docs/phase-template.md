@@ -165,7 +165,32 @@ pub const TestData = struct { pub fn sample() T {...} };
 ## Refs
 
 <references>
-**Phases:** [X], [Y] | **ADRs:** [XXX], [YYY] | **External:** [Papers, specs] | **Code:** [Implementations]
+**Templates & Frameworks:**
+- [ADR Template](adr-template.md) - Structure for architectural decisions
+- [Phase Template](phase-template.md) - This template (for reference)
+- [Planning Methodology](../.claude/commands/0_plan_phases.md) - How phases are generated
+
+**Project Context:**
+- [PRD](prd.md) - Product requirements (§4 Core Concepts, §5 Architecture, §6-7 specific requirements)
+- [Context](context.md) - Prior art (state channels, rollups, event sourcing patterns from Nitro, Perun, Arbitrum, etc.)
+- [Learning Paths](LEARNING_PATHS.md) - Guided reading for implementers
+
+**Architecture & Decisions:**
+- [Architecture Docs](architecture/) - Design documents (event-types.md, etc.)
+- [ADR Index](adrs/README.md) - All architectural decisions mapped to phases
+- Specific ADRs: [ADR-XXX], [ADR-YYY] (replace with actual ADRs for this phase)
+
+**Testing & Implementation:**
+- [Fuzz Tests Guide](fuzz-tests.md) - Zig fuzz testing (Linux/Docker)
+- [CLAUDE.md](../CLAUDE.md) - Coding conventions, TDD approach, Zig 0.15+ notes
+
+**Dependencies:**
+- Prior phases: [Phase X](../.claude/commands/X_phase_*.md), [Phase Y](../.claude/commands/Y_phase_*.md)
+- External: [Papers, specs, implementations]
+
+**Related Code:**
+- Implementation: `src/module/*.zig`
+- Tests: `src/module/*.test.zig`
 </references>
 
 <example>

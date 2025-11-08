@@ -176,7 +176,7 @@ P1 establishes event-sourcing foundation - core innovation over traditional snap
 
 <context-mgmt>
 **Inline:** Type defs, interface specs, code <50 lines, critical patterns <1pg, immediate deps
-**Reference:** Complete PRD, go-nitro arch, research papers, large files, shared context
+**Reference:** Complete PRD, state channel architecture patterns, research papers, large files, shared context
 **Rule:** Phase-specific + <100 lines = inline; Shared/stable = reference
 </context-mgmt>
 

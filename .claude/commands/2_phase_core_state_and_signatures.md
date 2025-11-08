@@ -27,7 +27,7 @@ Channel state primitives: State/FixedPart/VariablePart structures, secp256k1 sig
 - OBJ-1: State/FixedPart/VariablePart + ABI encoding
 - OBJ-2: secp256k1 sign/verify with recovery
 - OBJ-3: Keccak256 (Ethereum-compatible)
-- OBJ-4: ChannelId generation (matches go-nitro)
+- OBJ-4: ChannelId generation (matches proven patterns)
 - OBJ-5: Emit events for state operations
 
 ## Success Criteria
@@ -72,7 +72,7 @@ EventStore (P1)
 - Q: Encoding format?
 - Opts: A) Ethereum ABI packed | B) JSON | C) Custom binary | D) RLP
 - Rec: A
-- Why: Contract compat, deterministic, go-nitro match vs ⚠️ complex (padding rules)
+- Why: Contract compat, deterministic, standard pattern vs ⚠️ complex (padding rules)
 
 **ADR-0006: ChannelId Generation**
 - Q: How compute ID?
@@ -184,7 +184,7 @@ pub fn emitStateReceived(store: *EventStore, state: State, sig: Signature, from:
 **W1:** ADRs, core types (State/FixedPart/VariablePart), ChannelId generation
 **W2:** secp256k1 integration, ABI encoding
 **W3:** State hashing, sign/verify, unit tests
-**W4:** Cross-impl test vs go-nitro, event integration, benchmarks, demo
+**W4:** Cross-impl test vs reference implementations, event integration, benchmarks, demo
 
 **Tasks:**
 - T1: Define structs (S, P0)
@@ -277,3 +277,155 @@ const sig = try state.sign(allocator, alice_key);
 const addr = try state.recoverSigner(allocator, sig);
 const valid = std.mem.eql(u8, &addr, &alice);
 ```
+
+---
+
+## CONTEXT FROM PHASE 1 (Event Surface)
+
+**Phase 1 Status:** Event types defined ✅ | EventStore implementation → Phase 1b (pending)
+
+### Event Types Already Defined
+
+Phase 1 delivered **20 events** including state-related events relevant to this phase:
+
+**Channel State Events (use these):**
+- [`channel-created`](../../schemas/events/channel-created.schema.json) - Emitted when ChannelId derived from FixedPart
+- [`state-signed`](../../schemas/events/state-signed.schema.json) - Emitted when local party signs state
+- [`state-received`](../../schemas/events/state-received.schema.json) - Emitted when remote state received/validated
+- [`state-supported-updated`](../../schemas/events/state-supported-updated.schema.json) - Emitted when supported turn advances
+
+**Implementation:**
+- Event types: [src/event_store/events.zig](../../src/event_store/events.zig)
+- Event schemas: [schemas/events/](../../schemas/events/)
+- Event catalog: [docs/architecture/event-types.md](../../docs/architecture/event-types.md)
+
+### Integration Requirements for Phase 2
+
+**When implementing State operations:**
+
+1. **ChannelId Generation:**
+   ```zig
+   pub fn channelId(self: FixedPart, a: Allocator) !ChannelId {
+       // 1. ABI encode FixedPart
+       // 2. Keccak256 hash
+       // 3. Emit channel-created event
+       const id = keccak256(abi_encoded);
+       try emitChannelCreated(event_store, self, id, a);
+       return id;
+   }
+   ```
+
+2. **State Signing:**
+   ```zig
+   pub fn sign(self: State, a: Allocator, pk: [32]u8) !Signature {
+       const state_hash = try self.hash(a);
+       const sig = try signEthereumMessage(state_hash, pk);
+       // Emit state-signed event
+       try emitStateSigned(event_store, self, sig, a);
+       return sig;
+   }
+   ```
+
+3. **State Reception:**
+   ```zig
+   pub fn recoverSigner(self: State, a: Allocator, sig: Signature) !Address {
+       const state_hash = try self.hash(a);
+       const addr = try recoverEthereumMessageSigner(state_hash, sig);
+       // Emit state-received event (if from remote peer)
+       try emitStateReceived(event_store, self, sig, addr, a);
+       return addr;
+   }
+   ```
+
+**Event Emission Pattern:**
+```zig
+pub fn emitStateSigned(
+    store: *EventStore,  // From Phase 1b (when implemented)
+    state: State,
+    sig: Signature,
+    a: Allocator
+) !void {
+    const event = Event{
+        .state_signed = .{
+            .event_version = 1,
+            .timestamp_ms = @intCast(std.time.milliTimestamp()),
+            .channel_id = try state.channelId(a),
+            .turn_num = state.turn_num,
+            .state_hash = try state.hash(a),
+            .signer = try state.recoverSigner(a, sig),
+            .signature = sig.toBytes(),
+            .is_final = state.is_final,
+            .app_data_hash = if (state.app_data.len > 0) 
+                keccak256(state.app_data) else null,
+        },
+    };
+    _ = try store.append(event);
+}
+```
+
+### State Hashing Must Match Event ID Approach
+
+Phase 1 established canonical serialization for event IDs:
+- Sorted keys (lexicographic)
+- No whitespace
+- Keccak256 hashing
+
+**State.hash() should use similar approach:**
+```zig
+pub fn hash(self: State, a: Allocator) !Bytes32 {
+    // 1. ABI encode State (deterministic, sorted)
+    // 2. Keccak256 hash
+    // 3. Result must be reproducible (same state → same hash)
+    const encoded = try abiEncode(a, self);
+    defer a.free(encoded);
+    return keccak256(encoded);
+}
+```
+
+**Consistency requirement:** If state is reconstructed from events, hashing it should produce same state_hash as stored in `state-signed` event.
+
+### Test Vectors Available
+
+Use existing golden vectors to verify compatibility:
+- [testdata/events/state-signed.golden.json](../../testdata/events/state-signed.golden.json)
+- Contains example state_hash, signature, channel_id values
+- Phase 2 implementation should produce byte-identical hashes
+
+### Validation Hooks
+
+State validation can reference event history:
+```zig
+pub fn validate(state: State, ctx: ValidationContext) !void {
+    // Check if channel exists (via event log query)
+    const channel_events = try ctx.getChannelEvents(state.channelId());
+    if (channel_events.len == 0) return error.ChannelNotFound;
+    
+    // Check turn progression (vs latest state-signed event)
+    const latest = ctx.getLatestSignedTurn(state.channelId());
+    if (state.turn_num <= latest) return error.InvalidTurnProgression;
+}
+```
+
+### Files to Reference
+
+**Phase 1 Deliverables:**
+- Event definitions: [src/event_store/events.zig](../../src/event_store/events.zig)
+- ID derivation (for consistency): [src/event_store/id.zig](../../src/event_store/id.zig)
+- Event schemas: [schemas/events/state-*.schema.json](../../schemas/events/)
+- Documentation: [docs/architecture/event-types.md](../../docs/architecture/event-types.md)
+
+**Don't Re-implement:**
+- Event types (already exist)
+- Event ID derivation (use existing keccak256 approach)
+- Canonical JSON serialization (exists in id.zig)
+
+**Do Implement:**
+- State/FixedPart/VariablePart types (new in P2)
+- ABI encoding (Ethereum-specific, different from JSON)
+- secp256k1 signatures (new in P2)
+- Event emission helpers (bridge between State and Event types)
+
+---
+
+**Context Added:** 2025-11-08  
+**Phase 1 Status:** Events defined, EventStore pending Phase 1b

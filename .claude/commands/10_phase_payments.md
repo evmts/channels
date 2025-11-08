@@ -4,7 +4,7 @@
 
 ## Summary
 
-Payment vouchers - atomic value transfer within virtual channels. Vouchers = signed commitments to pay, validated against channel state, resolved during defund. Critical for payment use cases - without vouchers, channels only support final settlement. Simple protocol: create voucher → validate → accumulate → settle on defund. Matches go-nitro payment voucher design.
+Payment vouchers - atomic value transfer within virtual channels. Vouchers = signed commitments to pay, validated against channel state, resolved during defund. Critical for payment use cases - without vouchers, channels only support final settlement. Simple protocol: create voucher → validate → accumulate → settle on defund. Follows proven payment voucher patterns.
 
 ## Objectives
 
@@ -106,7 +106,7 @@ pub fn resolvePayments(vouchers: []Voucher, original: Outcome, a: Allocator) !Ou
 |--|--|--|--|
 |Voucher replay attacks|L|H|Nonce validation, extensive tests|
 |Double-spending|L|H|Validation checks, accumulation logic|
-|Resolution bugs (wrong outcome)|M|H|Unit tests, cross-check go-nitro|
+|Resolution bugs (wrong outcome)|M|H|Unit tests, cross-check reference implementations|
 |Performance (many vouchers)|L|M|Benchmark, acceptable if <1s for 1000|
 
 ## Deliverables
@@ -125,7 +125,7 @@ pub fn resolvePayments(vouchers: []Voucher, original: Outcome, a: Allocator) !Ou
 ## Refs
 
 **Phases:** P2 (Sig), P5 (Defund), P9 (Virtual)
-**External:** go-nitro payment vouchers, VirtualPaymentApp.sol
+**External:** Payment channel voucher patterns, payment app contracts
 
 ## Example
 

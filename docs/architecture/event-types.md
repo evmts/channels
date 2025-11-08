@@ -617,7 +617,7 @@ When updating schema:
 
 - **JSON Schema Spec:** https://json-schema.org/draft/2020-12/schema
 - **Keccak256:** Ethereum's hash function (SHA-3 variant)
-- **go-nitro:** https://github.com/statechannels/go-nitro (reference implementation)
+- **Nitro Protocol:** https://docs.statechannels.org/ (state channel specification)
 - **ForceMove Protocol:** https://github.com/statechannels/nitro-protocol
 - **PRD:** [docs/prd.md](../prd.md)
 

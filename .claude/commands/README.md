@@ -127,7 +127,7 @@ Core innovation - append-only event log as source of truth. Establishes event ty
 Channel state primitives - State/FixedPart/VariablePart structures, secp256k1 signatures, ABI encoding, ChannelId generation. Required by all protocols.
 
 **Key Deliverables:** State types, signature operations, ABI encoder
-**Success Criteria:** Encoding matches go-nitro byte-for-byte, signatures verify
+**Success Criteria:** Encoding matches reference implementations byte-for-byte, signatures verify
 **ADRs:** 0004 (Signature scheme), 0005 (ABI encoding)
 
 ---
@@ -293,7 +293,7 @@ All phases follow the structure defined in [`docs/phase-template.md`](../../docs
 - **PRD:** [`docs/prd.md`](../../docs/prd.md) - Complete product requirements
 - **ADR Index:** [`docs/adrs/README.md`](../../docs/adrs/README.md) - Architectural decisions
 - **Template:** [`docs/phase-template.md`](../../docs/phase-template.md) - Phase structure
-- **go-nitro:** [`go-nitro/`](../../go-nitro/) - Reference implementation
+- **References:** State channel research papers, proven implementation patterns, op-stack documentation
 
 ---
 

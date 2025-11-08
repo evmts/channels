@@ -19,7 +19,7 @@ First complete protocol - DirectFund (prefund→deposit→postfund). Establishes
 **Done when:**
 - Objective interface: Crank, Update, SideEffects types
 - DirectFund completes: Prefund→Deposit→Postfund 100%
-- WaitingFor matches go-nitro states
+- WaitingFor matches proven FSM states
 - Side effects emit (messages + txs) 100% cov
 - Perf: <1s setup 100 channels
 - 100+ tests, 90%+ cov
@@ -188,3 +188,169 @@ for (result.side_effects) |effect| {
     }
 }
 ```
+
+---
+
+## CONTEXT FROM PHASE 1 (Objective Events)
+
+**Phase 1 Status:** Objective lifecycle events defined ✅
+
+### Objective Events to Emit
+
+Phase 1 defined **5 objective lifecycle events** to integrate with DirectFund protocol:
+
+**Events to Use:**
+- [`objective-created`](../../schemas/events/objective-created.schema.json) - When DirectFund objective spawned
+- [`objective-approved`](../../schemas/events/objective-approved.schema.json) - After policymaker approves funding
+- [`objective-cranked`](../../schemas/events/objective-cranked.schema.json) - Each time Crank() executes
+- [`objective-completed`](../../schemas/events/objective-completed.schema.json) - When funding reaches Postfund complete
+- [`objective-rejected`](../../schemas/events/objective-rejected.schema.json) - If funding fails/rejected
+
+**State Transition Events (from Phase 1):**
+- `state-signed` - When generating prefund/postfund states
+- `state-received` - When receiving counterparty's states
+- `deposit-detected` - When chain service observes deposit
+
+**Implementation Files:**
+- Event types: [src/event_store/events.zig](../../src/event_store/events.zig)
+- Event schemas: [schemas/events/objective-*.schema.json](../../schemas/events/)
+- Event catalog: [docs/architecture/event-types.md](../../docs/architecture/event-types.md)
+
+### Integration Pattern for DirectFund
+
+**Objective Creation:**
+```zig
+pub fn createDirectFund(
+    participants: []Address,
+    nonce: u64,
+    outcome: Outcome,
+    event_store: *EventStore,
+    allocator: Allocator
+) !*DirectFundObjective {
+    const obj_id = ObjectiveId.generate();
+    const channel_id = try FixedPart.channelId(...);
+    
+    // Emit objective-created event
+    try event_store.append(Event{
+        .objective_created = .{
+            .event_version = 1,
+            .timestamp_ms = @intCast(std.time.milliTimestamp()),
+            .objective_id = obj_id,
+            .objective_type = .DirectFund,
+            .channel_id = channel_id,
+            .participants = participants,
+        },
+    });
+    
+    return DirectFundObjective{
+        .id = obj_id,
+        .channel_id = channel_id,
+        .status = .Unapproved,
+        // ...
+    };
+}
+```
+
+**Crank Execution:**
+```zig
+pub fn crank(
+    self: *DirectFundObjective,
+    event_store: *EventStore,
+    allocator: Allocator
+) !CrankResult {
+    const side_effects = try self.computeSideEffects(allocator);
+    
+    // Emit objective-cranked event
+    try event_store.append(Event{
+        .objective_cranked = .{
+            .event_version = 1,
+            .timestamp_ms = @intCast(std.time.milliTimestamp()),
+            .objective_id = self.id,
+            .side_effects_count = @intCast(side_effects.len),
+            .waiting = self.waitingFor() != .None,
+        },
+    });
+    
+    return CrankResult{
+        .updated_objective = self,
+        .side_effects = side_effects,
+    };
+}
+```
+
+**Objective Completion:**
+```zig
+if (self.status == .Complete) {
+    try event_store.append(Event{
+        .objective_completed = .{
+            .event_version = 1,
+            .timestamp_ms = @intCast(std.time.milliTimestamp()),
+            .objective_id = self.id,
+            .success = true,
+            .final_channel_state = try self.getPostfundHash(allocator),
+        },
+    });
+}
+```
+
+### Event-Driven Protocol Flow
+
+**Traditional snapshot approach:** Objective updates internal state, returns side effects
+
+**Event-sourced approach (our implementation):**
+1. Objective receives event (e.g., `state-received`)
+2. Crank computes next state + side effects (pure function)
+3. **Emit `objective-cranked` event** documenting transition
+4. Return side effects for dispatch
+5. Side effect execution triggers new events (e.g., `message-sent`)
+
+**Audit trail:** Can replay all `objective-*` events to reconstruct funding flow
+
+### Validation Using Event History
+
+DirectFund validation can query event log:
+```zig
+pub fn validate(self: *DirectFundObjective, ctx: ValidationContext) !void {
+    // Check if already completed
+    const events = try ctx.getObjectiveEvents(self.id);
+    for (events) |evt| {
+        if (evt == .objective_completed) return error.AlreadyCompleted;
+    }
+    
+    // Verify state progression
+    const state_events = try ctx.getChannelEvents(self.channel_id);
+    const prefund_count = countStatesSigned(state_events, 0); // turn 0
+    const postfund_count = countStatesSigned(state_events, 3); // turn 3
+    
+    if (self.status == .Postfund and postfund_count < 2) {
+        return error.InsufficientSignatures;
+    }
+}
+```
+
+### Files to Reference
+
+**Phase 1 deliverables:**
+- Objective events: [schemas/events/objective-*.schema.json](../../schemas/events/)
+- State events: [schemas/events/state-*.schema.json](../../schemas/events/)
+- Chain events: [schemas/events/deposit-detected.schema.json](../../schemas/events/deposit-detected.schema.json)
+- Event types: [src/event_store/events.zig](../../src/event_store/events.zig)
+
+**Phase 2 deliverables (when complete):**
+- State types for prefund/postfund generation
+- Signature creation for signed states
+
+**Don't re-implement:**
+- Event type definitions (use existing Event union)
+- Event emission (use EventStore.append from Phase 1b)
+
+**Do implement:**
+- DirectFundObjective type
+- Crank() logic (FSM transitions)
+- SideEffect computation
+- WaitingFor state logic
+
+---
+
+**Context Added:** 2025-11-08  
+**Dependencies:** Phase 1 (events ✅), Phase 1b (EventStore - pending), Phase 2 (State/Sig - pending)

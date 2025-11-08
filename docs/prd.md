@@ -319,6 +319,12 @@ SELECT player_id FROM players WHERE
 
 **Definition:** State channels where the source of truth is an ordered log of events (messages), not snapshots of state.
 
+**Related Documentation:**
+- **Event Catalog:** [docs/architecture/event-types.md](architecture/event-types.md) - Complete event surface area with schemas, validation, ID derivation
+- **Implementation:** [Phase 1](./.claude/commands/1_phase_1_event_sourcing.md) - Event sourcing foundation
+- **Prior Art:** [docs/context.md](context.md) - Event sourcing patterns from PGlite, ElectricSQL, Replicache, go-nitro
+- **ADRs:** [ADR-0001, 0002, 0003](adrs/README.md) - Event sourcing strategy, serialization, in-memory log
+
 **Comparison:**
 
 | Traditional State Channels       | Event-Sourced State Channels        |
@@ -2362,10 +2368,17 @@ We adopt a rigorous development methodology:
 
 **Planning Framework:**
 
-- **Phase Templates:** Each phase follows `docs/phase-template.md` structure
-- **ADR Documentation:** Architectural decisions documented per `docs/adrs/0000-adrs.md`
-- **Phase Prompts:** Detailed phase plans in `.claude/commands/N_phase_*.md`
+- **Phase Templates:** Each phase follows [docs/phase-template.md](phase-template.md) structure
+- **ADR Documentation:** Architectural decisions documented per [docs/adrs/0000-adrs.md](adrs/0000-adrs.md)
+- **Phase Index:** [.claude/commands/README.md](../.claude/commands/README.md) - Phase roadmap, dependency graph, timeline
+- **Phase Prompts:** Detailed phase plans in [.claude/commands/N_phase_*.md](../.claude/commands/) - Individual phase specifications
+- **Planning Methodology:** [.claude/commands/0_plan_phases.md](../.claude/commands/0_plan_phases.md) - How phases are generated and updated
 - **Validation Gates:** Each phase has explicit success criteria and exit gates
+
+**For Implementation Guidance:**
+- **Getting Started:** [docs/LEARNING_PATHS.md](LEARNING_PATHS.md) - Guided reading sequences for implementers
+- **Coding Conventions:** [CLAUDE.md](../CLAUDE.md) - Zig conventions, TDD approach, prompt-driven workflow
+- **Testing:** [docs/fuzz-tests.md](fuzz-tests.md) - Zig fuzz testing guide
 
 **Deliverables per Phase:**
 

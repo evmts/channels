@@ -12,7 +12,7 @@
 You are beginning implementation of the event-sourced state channels system. Phase planning is complete (12 phases documented). Now execute Phase 1 - Event Sourcing Foundation.
 
 **Why Phase 1 is Critical:**
-- Core innovation over go-nitro (events vs snapshots)
+- Core innovation over traditional snapshots (events vs snapshots)
 - Foundation for all subsequent phases
 - Establishes event sourcing patterns
 - Validates architecture before complexity
@@ -634,7 +634,7 @@ Start with Week 1: Write ADR-0004 (Signature Scheme) and ADR-0005 (State Encodin
 - **Phase Index:** `.claude/commands/README.md`
 - **ADR Template:** `docs/adr-template.md`
 - **PRD:** `docs/prd.md` (§4.1 Event Sourcing)
-- **go-nitro Reference:** `go-nitro/node/engine/store/`
+- **Reference:** State channel research on persistence patterns
 
 ---
 

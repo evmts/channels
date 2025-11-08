@@ -12,7 +12,7 @@
 **Assumptions:** [What assuming]
 **Affected:** [Who/what impacted]
 
-**Ex:** Store channel data. go-nitro: snapshots (BuntDB). Our vision: audit trails, time-travel debug, provable derivation. Snapshots lose history→hard debug, unverifiable.
+**Ex:** Store channel data. Traditional: snapshots. Our vision: audit trails, time-travel debug, provable derivation. Snapshots lose history→hard debug, unverifiable.
 </context>
 
 ## Drivers
@@ -85,11 +85,34 @@ pub const Interface = struct {...};
 ## Related
 
 <related>
-**Deps:** ADR-XXXX (depends), ADR-YYYY (informs) | **Supersedes:** ADR-ZZZZ | **See:** Phase N, External (go-nitro ADR, paper)
+**ADR Dependencies:**
+- **Depends on:** ADR-XXXX (required decisions)
+- **Informs:** ADR-YYYY (related decisions)
+- **Supersedes:** ADR-ZZZZ (if replacing previous decision)
+
+**Project Context:**
+- **PRD:** [prd.md](../prd.md) §X.Y - Specific requirement section this ADR addresses
+- **Context:** [context.md](../context.md) - Prior art section (e.g., "Nitro Objective Pattern", "Arbitrum WASM")
+- **Phase:** [.claude/commands/N_phase_*.md](../../.claude/commands/) - Implementation phase for this ADR
+- **Architecture:** [docs/architecture/*.md](../architecture/) - Related design docs
+
+**Implementation:**
+- **Code:** `src/module/*.zig` - Modules implementing this decision
+- **Tests:** `src/module/*.test.zig` - Test validating this decision
+- **ADR Framework:** [adrs/0000-adrs.md](0000-adrs.md) - ADR methodology
+
+**External References:**
+- [Papers] - Academic papers informing this decision
+- [Prior Art] - Implementations from other projects (Nitro, Perun, etc.)
+- [Discussions] - RFC/issue links
+- [Benchmarks] - Performance data supporting decision
 </related>
 
 <references>
-[Papers], [Prior art], [Discussions], [Benchmarks]
+**Reading for Context:**
+- [Phase Template](../phase-template.md) - Phase structure showing how ADRs fit
+- [Learning Paths](../LEARNING_PATHS.md) - How to read ADRs as implementer/architect
+- [CLAUDE.md](../../CLAUDE.md) - How ADRs integrate with prompt-driven development
 </references>
 
 <changelog>
