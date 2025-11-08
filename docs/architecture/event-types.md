@@ -615,29 +615,11 @@ When updating schema:
 
 ## References
 
-**Project Documentation:**
-- **PRD:** [docs/prd.md](../prd.md) - §4.1 Event Sourcing, §4.2 Message Logs
-- **Context:** [docs/context.md](../context.md) - Event sourcing patterns (ElectricSQL, Replicache, PGlite, go-nitro)
-- **Phase 1:** [.claude/commands/1_phase_1_event_sourcing.md](../../.claude/commands/1_phase_1_event_sourcing.md) - Implementation phase
-- **ADRs:** [docs/adrs/README.md](../adrs/README.md) - ADR-0001 (event sourcing strategy), ADR-0002 (serialization), ADR-0003 (in-memory log)
-- **Architecture Index:** [docs/architecture/README.md](README.md) - All architecture docs
-
-**Implementation:**
-- **Code:** `src/event_store/events.zig` - Event definitions and validation
-- **ID Derivation:** `src/event_store/id.zig` - keccak256-based ID generation
-- **Tests:** `src/event_store/events.test.zig` - 50+ tests with golden vectors
-- **Root:** `src/root.zig` - Test registration
-
-**Prior Art & Specifications:**
-- **Nitro Protocol:** https://docs.statechannels.org/ - State channel specification
-- **ForceMove Protocol:** https://github.com/statechannels/nitro-protocol - On-chain contracts
-- **go-nitro:** https://github.com/statechannels/go-nitro - Reference implementation
-- **JSON Schema Spec:** https://json-schema.org/draft/2020-12/schema - Schema format
-- **Keccak256:** Ethereum's hash function (SHA-3 variant) - Used for event IDs
-
-**Testing & Tools:**
-- **Fuzz Tests:** [docs/fuzz-tests.md](../fuzz-tests.md) - Zig fuzz testing guide
-- **CLAUDE.md:** [CLAUDE.md](../../CLAUDE.md) - Coding conventions and TDD approach
+- **JSON Schema Spec:** https://json-schema.org/draft/2020-12/schema
+- **Keccak256:** Ethereum's hash function (SHA-3 variant)
+- **Nitro Protocol:** https://docs.statechannels.org/ (state channel specification)
+- **ForceMove Protocol:** https://github.com/statechannels/nitro-protocol
+- **PRD:** [docs/prd.md](../prd.md)
 
 ---
 

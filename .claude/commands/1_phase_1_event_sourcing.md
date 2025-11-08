@@ -353,33 +353,10 @@ fn benchReconstruct(b: *Benchmark) !void {
 
 ## Refs
 
-**Templates & Frameworks:**
-- [Phase Template](../../docs/phase-template.md) - Standard structure (this phase follows it)
-- [ADR Template](../../docs/adr-template.md) - Format for ADR-0001, 0002, 0003
-
-**Project Context:**
-- **PRD:** [docs/prd.md](../../docs/prd.md) §4.1 Event Sourcing, §4.2 Message Logs, §8 Phase 1 Roadmap
-- **Context:** [docs/context.md](../../docs/context.md) - Event sourcing patterns (ElectricSQL, Replicache, PGlite, go-nitro event handling)
-- **Learning Path:** [docs/LEARNING_PATHS.md](../../docs/LEARNING_PATHS.md) - Phase 1 specific reading sequence
-
-**Architecture & Decisions:**
-- **Event Catalog:** [docs/architecture/event-types.md](../../docs/architecture/event-types.md) - Complete 20-event surface area implemented in this phase
-- **Architecture Index:** [docs/architecture/README.md](../../docs/architecture/README.md)
-- **ADRs to Create:** [docs/adrs/README.md](../../docs/adrs/README.md) - ADR-0001 (event sourcing strategy), ADR-0002 (serialization), ADR-0003 (in-memory log)
-
-**Testing & Implementation:**
-- **Fuzz Tests:** [docs/fuzz-tests.md](../../docs/fuzz-tests.md) - Zig fuzz testing guide
-- **CLAUDE.md:** [CLAUDE.md](../../CLAUDE.md) - Zig 0.15+ conventions, TDD, error handling
-- **Phase Execution:** [START_PHASE_1.md](START_PHASE_1.md) - Week-by-week execution guide
-
-**Dependencies:**
-- Prior phases: None (foundation phase)
-- Future phases using this: P2 (state events), P3 (objective events), P4 (durable persistence), all phases
-
-**External Prior Art:**
-- Event sourcing: CQRS pattern, event-first databases
-- State channels: go-nitro event model, Perun channel state management
-- Contrast: Snapshot-based approaches (what we're NOT doing)
+- ADRs: 0001-0003 (to write)
+- Phases: P4 (RocksDB migration)
+- External: State channel research papers on snapshot approaches (contrast)
+- PRD: §4.1 Event Sourcing
 
 ## Example
 

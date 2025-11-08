@@ -290,27 +290,10 @@ All phases follow the structure defined in [`docs/phase-template.md`](../../docs
 
 ## References
 
-**Project Documentation:**
-- **PRD:** [docs/prd.md](../../docs/prd.md) - Complete product requirements (§8 Implementation Roadmap)
-- **Context:** [docs/context.md](../../docs/context.md) - Prior art (Nitro, Perun, Arbitrum, rollups, event sourcing)
-- **Learning Paths:** [docs/LEARNING_PATHS.md](../../docs/LEARNING_PATHS.md) - Guided reading for implementers (phase-specific paths)
-- **ADR Index:** [docs/adrs/README.md](../../docs/adrs/README.md) - All 17 architectural decisions mapped to phases
-- **Architecture Docs:** [docs/architecture/](../../docs/architecture/) - Design documents (event-types.md, etc.)
-
-**Templates & Framework:**
-- **Phase Template:** [docs/phase-template.md](../../docs/phase-template.md) - Standard structure for all phases
-- **ADR Template:** [docs/adr-template.md](../../docs/adr-template.md) - Architectural decision record format
-- **Planning Methodology:** [0_plan_phases.md](0_plan_phases.md) - How phases are generated and regenerated
-
-**Implementation Guidance:**
-- **CLAUDE.md:** [CLAUDE.md](../../CLAUDE.md) - Coding conventions, TDD, prompt-driven development
-- **Fuzz Tests:** [docs/fuzz-tests.md](../../docs/fuzz-tests.md) - Zig fuzz testing guide (Linux/Docker)
-- **Phase 1 Start:** [START_PHASE_1.md](START_PHASE_1.md) - Week-by-week execution guide
-
-**External References:**
-- State channel research papers (Nitro, Perun, Counterfactual)
-- Proven implementation patterns (go-nitro, go-perun)
-- op-stack documentation
+- **PRD:** [`docs/prd.md`](../../docs/prd.md) - Complete product requirements
+- **ADR Index:** [`docs/adrs/README.md`](../../docs/adrs/README.md) - Architectural decisions
+- **Template:** [`docs/phase-template.md`](../../docs/phase-template.md) - Phase structure
+- **References:** State channel research papers, proven implementation patterns, op-stack documentation
 
 ---
 

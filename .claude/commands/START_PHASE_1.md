@@ -70,15 +70,13 @@ You are beginning implementation of the event-sourced state channels system. Pha
 
 **Task:** Write comprehensive architecture docs for event sourcing
 
-**File:** `docs/architecture/event-types.md` (already created - review and enhance if needed)
+**File:** `docs/architecture/event-sourcing.md`
 
 **Sections:**
-1. **Overview:** What is event sourcing, why we chose it ✅
-2. **Event Types Catalog:** All event types (20 events) ✅
-3. **EventStore Design:** Append-only log, atomicity, subscribers (to implement)
-4. **State Reconstruction:** Fold algorithm, determinism (to implement)
-
-**Note:** The event catalog [docs/architecture/event-types.md](../../docs/architecture/event-types.md) is already comprehensive. Focus on implementing EventStore and reconstruction logic
+1. **Overview:** What is event sourcing, why we chose it
+2. **Event Types Catalog:** All event types (15+), when emitted
+3. **EventStore Design:** Append-only log, atomicity, subscribers
+4. **State Reconstruction:** Fold algorithm, determinism
 5. **Snapshots:** Optimization strategy, frequency, storage
 6. **Diagrams:** Component diagram, data flow, event lifecycle
 7. **Code Examples:** Creating events, appending, reconstructing
@@ -557,8 +555,9 @@ docs/
 │   ├── 0002-event-serialization-format.md
 │   └── 0003-in-memory-event-log.md
 ├── architecture/
-│   ├── event-types.md (✅ already exists - comprehensive event catalog)
-│   └── README.md (✅ already exists - architecture index)
+│   ├── event-sourcing.md
+│   ├── event-types.md
+│   └── README.md (updated)
 └── guides/
     └── using-event-store.md
 ```
