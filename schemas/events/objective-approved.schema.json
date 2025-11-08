@@ -1,0 +1,27 @@
+{
+  "$id": "schemas/events/objective-approved.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "objective-approved@v1",
+  "description": "Emitted when policymaker approves an objective",
+  "type": "object",
+  "required": ["event_version", "timestamp_ms", "objective_id"],
+  "properties": {
+    "event_version": {
+      "const": 1
+    },
+    "timestamp_ms": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "objective_id": {
+      "type": "string",
+      "pattern": "^0x[0-9a-fA-F]{64}$",
+      "description": "Objective being approved"
+    },
+    "approver": {
+      "type": "string",
+      "pattern": "^0x[0-9a-fA-F]{40}$",
+      "description": "Address of approving party"
+    }
+  }
+}

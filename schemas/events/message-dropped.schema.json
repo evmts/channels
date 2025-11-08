@@ -1,0 +1,40 @@
+{
+  "$id": "schemas/events/message-dropped.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "message-dropped@v1",
+  "description": "Emitted when message rejected due to decode/verify failure",
+  "type": "object",
+  "required": ["event_version", "timestamp_ms", "peer_id", "reason", "error_code"],
+  "properties": {
+    "event_version": {
+      "const": 1
+    },
+    "timestamp_ms": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "message_id": {
+      "type": "string",
+      "pattern": "^0x[0-9a-fA-F]{64}$",
+      "description": "Message ID if parseable"
+    },
+    "peer_id": {
+      "type": "string",
+      "description": "Peer that sent invalid message"
+    },
+    "reason": {
+      "type": "string",
+      "description": "Human-readable failure reason"
+    },
+    "error_code": {
+      "type": "string",
+      "enum": ["decode_failed", "signature_invalid", "channel_unknown", "payload_invalid", "replay_attack"],
+      "description": "Machine-readable error code"
+    },
+    "payload_size_bytes": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Raw payload size if available"
+    }
+  }
+}

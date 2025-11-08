@@ -1,0 +1,30 @@
+{
+  "$id": "schemas/events/objective-completed.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "objective-completed@v1",
+  "description": "Emitted when objective reaches final completed state",
+  "type": "object",
+  "required": ["event_version", "timestamp_ms", "objective_id", "success"],
+  "properties": {
+    "event_version": {
+      "const": 1
+    },
+    "timestamp_ms": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "objective_id": {
+      "type": "string",
+      "pattern": "^0x[0-9a-fA-F]{64}$"
+    },
+    "success": {
+      "type": "boolean",
+      "description": "Whether objective completed successfully"
+    },
+    "final_channel_state": {
+      "type": "string",
+      "pattern": "^0x[0-9a-fA-F]{64}$",
+      "description": "Hash of final channel state"
+    }
+  }
+}

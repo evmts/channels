@@ -1,0 +1,29 @@
+{
+  "$id": "schemas/events/objective-rejected.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "objective-rejected@v1",
+  "description": "Emitted when policymaker rejects an objective",
+  "type": "object",
+  "required": ["event_version", "timestamp_ms", "objective_id", "reason"],
+  "properties": {
+    "event_version": {
+      "const": 1
+    },
+    "timestamp_ms": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "objective_id": {
+      "type": "string",
+      "pattern": "^0x[0-9a-fA-F]{64}$"
+    },
+    "reason": {
+      "type": "string",
+      "description": "Human-readable rejection reason"
+    },
+    "error_code": {
+      "type": "string",
+      "description": "Machine-readable error code"
+    }
+  }
+}

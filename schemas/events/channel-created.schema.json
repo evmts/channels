@@ -1,0 +1,46 @@
+{
+  "$id": "schemas/events/channel-created.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "channel-created@v1",
+  "description": "Emitted when channel fixed part is materialized and ID derived",
+  "type": "object",
+  "required": ["event_version", "timestamp_ms", "channel_id", "participants", "challenge_duration"],
+  "properties": {
+    "event_version": {
+      "const": 1
+    },
+    "timestamp_ms": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "channel_id": {
+      "type": "string",
+      "pattern": "^0x[0-9a-fA-F]{64}$",
+      "description": "Derived channel identifier"
+    },
+    "participants": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^0x[0-9a-fA-F]{40}$"
+      },
+      "minItems": 2,
+      "maxItems": 255
+    },
+    "channel_nonce": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Nonce for channel uniqueness"
+    },
+    "app_definition": {
+      "type": "string",
+      "pattern": "^0x[0-9a-fA-F]{40}$",
+      "description": "Contract address of application logic"
+    },
+    "challenge_duration": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Challenge window duration in seconds"
+    }
+  }
+}

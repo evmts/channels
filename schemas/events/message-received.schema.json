@@ -1,0 +1,36 @@
+{
+  "$id": "schemas/events/message-received.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "message-received@v1",
+  "description": "Emitted when valid message received from peer and decoded",
+  "type": "object",
+  "required": ["event_version", "timestamp_ms", "message_id", "peer_id", "objective_id"],
+  "properties": {
+    "event_version": {
+      "const": 1
+    },
+    "timestamp_ms": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "message_id": {
+      "type": "string",
+      "pattern": "^0x[0-9a-fA-F]{64}$"
+    },
+    "peer_id": {
+      "type": "string",
+      "description": "Network identifier of sender peer"
+    },
+    "objective_id": {
+      "type": "string",
+      "pattern": "^0x[0-9a-fA-F]{64}$"
+    },
+    "payload_type": {
+      "type": "string"
+    },
+    "payload_size_bytes": {
+      "type": "integer",
+      "minimum": 0
+    }
+  }
+}

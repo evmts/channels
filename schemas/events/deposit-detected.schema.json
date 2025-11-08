@@ -1,0 +1,51 @@
+{
+  "$id": "schemas/events/deposit-detected.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "deposit-detected@v1",
+  "description": "Emitted when on-chain deposit event is observed by chain service",
+  "type": "object",
+  "required": ["event_version", "timestamp_ms", "channel_id", "block_num", "tx_index", "asset", "amount_deposited"],
+  "properties": {
+    "event_version": {
+      "const": 1
+    },
+    "timestamp_ms": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "channel_id": {
+      "type": "string",
+      "pattern": "^0x[0-9a-fA-F]{64}$"
+    },
+    "block_num": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Block number containing deposit"
+    },
+    "tx_index": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Transaction index within block"
+    },
+    "tx_hash": {
+      "type": "string",
+      "pattern": "^0x[0-9a-fA-F]{64}$",
+      "description": "Transaction hash"
+    },
+    "asset": {
+      "type": "string",
+      "pattern": "^0x[0-9a-fA-F]{40}$",
+      "description": "Asset contract address (0x0 for ETH)"
+    },
+    "amount_deposited": {
+      "type": "string",
+      "pattern": "^[0-9]+$",
+      "description": "Amount deposited (wei/atomic units as decimal string)"
+    },
+    "now_held": {
+      "type": "string",
+      "pattern": "^[0-9]+$",
+      "description": "Total amount now held in channel (decimal string)"
+    }
+  }
+}

@@ -1,0 +1,38 @@
+{
+  "$id": "schemas/events/challenge-cleared.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "challenge-cleared@v1",
+  "description": "Emitted when challenge is cleared by submitting newer state",
+  "type": "object",
+  "required": ["event_version", "timestamp_ms", "channel_id", "block_num", "tx_index", "new_turn_num_record"],
+  "properties": {
+    "event_version": {
+      "const": 1
+    },
+    "timestamp_ms": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "channel_id": {
+      "type": "string",
+      "pattern": "^0x[0-9a-fA-F]{64}$"
+    },
+    "block_num": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "tx_index": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "tx_hash": {
+      "type": "string",
+      "pattern": "^0x[0-9a-fA-F]{64}$"
+    },
+    "new_turn_num_record": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Turn number of clearing state (must be > challenged turn)"
+    }
+  }
+}

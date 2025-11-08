@@ -1,0 +1,40 @@
+{
+  "$id": "schemas/events/message-sent.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "message-sent@v1",
+  "description": "Emitted when message is dispatched to peer via message service",
+  "type": "object",
+  "required": ["event_version", "timestamp_ms", "message_id", "peer_id", "objective_id"],
+  "properties": {
+    "event_version": {
+      "const": 1
+    },
+    "timestamp_ms": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "message_id": {
+      "type": "string",
+      "pattern": "^0x[0-9a-fA-F]{64}$",
+      "description": "Unique message identifier"
+    },
+    "peer_id": {
+      "type": "string",
+      "description": "Network identifier of recipient peer"
+    },
+    "objective_id": {
+      "type": "string",
+      "pattern": "^0x[0-9a-fA-F]{64}$",
+      "description": "Associated objective ID"
+    },
+    "payload_type": {
+      "type": "string",
+      "description": "Type of payload (ObjectivePayload, ProposalPayload, etc)"
+    },
+    "payload_size_bytes": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Serialized payload size"
+    }
+  }
+}

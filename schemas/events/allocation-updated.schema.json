@@ -1,0 +1,42 @@
+{
+  "$id": "schemas/events/allocation-updated.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "allocation-updated@v1",
+  "description": "Emitted when asset allocation changes on-chain",
+  "type": "object",
+  "required": ["event_version", "timestamp_ms", "channel_id", "block_num", "tx_index", "asset", "new_amount"],
+  "properties": {
+    "event_version": {
+      "const": 1
+    },
+    "timestamp_ms": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "channel_id": {
+      "type": "string",
+      "pattern": "^0x[0-9a-fA-F]{64}$"
+    },
+    "block_num": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "tx_index": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "tx_hash": {
+      "type": "string",
+      "pattern": "^0x[0-9a-fA-F]{64}$"
+    },
+    "asset": {
+      "type": "string",
+      "pattern": "^0x[0-9a-fA-F]{40}$"
+    },
+    "new_amount": {
+      "type": "string",
+      "pattern": "^[0-9]+$",
+      "description": "New allocated amount (decimal string)"
+    }
+  }
+}

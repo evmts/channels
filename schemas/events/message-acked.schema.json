@@ -1,0 +1,31 @@
+{
+  "$id": "schemas/events/message-acked.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "message-acked@v1",
+  "description": "Emitted when delivery acknowledgement received from peer",
+  "type": "object",
+  "required": ["event_version", "timestamp_ms", "message_id", "peer_id"],
+  "properties": {
+    "event_version": {
+      "const": 1
+    },
+    "timestamp_ms": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "message_id": {
+      "type": "string",
+      "pattern": "^0x[0-9a-fA-F]{64}$",
+      "description": "ID of original message being acknowledged"
+    },
+    "peer_id": {
+      "type": "string",
+      "description": "Peer that acknowledged receipt"
+    },
+    "roundtrip_ms": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Time between send and ack in milliseconds"
+    }
+  }
+}
