@@ -33,8 +33,8 @@
     // internet connectivity.
     .dependencies = .{
         .zabi = .{
-            .url = "https://github.com/Raiden1411/zabi/archive/refs/tags/v0.18.0.tar.gz",
-            .hash = "zabi-0.18.0-UB4phtC8SAADwr0BUfLzDsYfHCoprRJjjbQqmozAZqDs",
+            .url = "https://github.com/Raiden1411/zabi/archive/refs/tags/v0.15.6.tar.gz",
+            .hash = "zabi-0.15.4-AAAAAA7MRQC0qTqyjsYKx4_pFvcFXgOoNZbUItuoRADb",
         },
     },
     .paths = .{
