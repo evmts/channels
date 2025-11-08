@@ -1,8 +1,8 @@
 # Project: Event-Sourced State Channels in Zig
 
-**Building:** State channel implementation (like go-nitro) with event sourcing as core innovation. Event log = source-of-truth (vs snapshots). Enables audit trails, time-travel debugging, provable state derivation.
+**Building:** WASM-based state channel implementation for op-stack with event sourcing as core innovation. Event log = source-of-truth (vs snapshots). Enables audit trails, time-travel debugging, provable state derivation.
 
-**Reference:** `go-nitro/` dir contains go-nitro source (reference implementation). `docs/` contains PRD, architecture, planning framework.
+**Reference:** `docs/` contains PRD, architecture, planning framework.
 
 **Methodology:** Doc→Test→Code. Phases planned via prompts (`.claude/commands/N_phase_*.md`). Prompts versioned+committed. When implementation reveals issues: update prompt→regenerate code→git rebase.
 
@@ -36,7 +36,7 @@ Default Bun over Node.js:
 
 **Version Issues:** Training data uses Zig 0.14, we use 0.15+. Breaking changes: I/O reader/writer interfaces, Array interface. When blocked: check std lib code in homebrew.
 
-**Tests:** Separate files: `foo.zig` + `foo.test.zig`. Add all tests to `root.zig` so they run.
+**Tests:** Separate files: `foo.zig` + `foo.test.zig`. Add all tests to `root.zig` so they run. See [fuzz testing guide](docs/fuzz-tests.md) for fuzzing.
 
 **Errors:** Always handle. Never swallow (incl allocation). Panic/unreachable only if codepath impossible.
 

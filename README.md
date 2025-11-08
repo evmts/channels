@@ -25,7 +25,7 @@ Traditional channels store opaque state snapshots. This system stores ordered me
 - **Language:** Zig 0.15+ (no GC, explicit control, small WASM output)
 - **Storage:** RocksDB (append-optimized LSM) + PostgreSQL (PGlite WASM for derived state)
 - **Network:** TCP → libp2p (production)
-- **Blockchain:** Ethereum/L2 (reuses go-nitro contracts)
+- **Blockchain:** Ethereum/L2 (op-stack compatible contracts)
 - **WASM:** wasmer runtime (deterministic, sandboxed execution)
 - **Serialization:** JSON → MessagePack (events), ABI-packed (state)
 
@@ -53,9 +53,9 @@ Traditional channels store opaque state snapshots. This system stores ordered me
 11. WASM state derivation
 12. Production hardening
 
-## Reference Implementation
+## Implementation Approach
 
-Based on **go-nitro** (Magmo/Statechannels team). Preserves Objective/Crank pattern, WaitingFor enumeration, multi-layered architecture. Improves with event sourcing, Zig performance, tagged unions, binary serialization.
+Built for **op-stack** L2s with WASM state derivation support. Follows state channel best practices: Objective/Crank pattern, WaitingFor enumeration, multi-layered architecture. Novel: event sourcing, Zig performance, tagged unions, binary serialization.
 
 ## Key Documentation
 
@@ -85,6 +85,11 @@ zig build
 Test Zig:
 ```bash
 zig build test
+```
+
+Fuzz test (Linux/Docker only - see [fuzz testing guide](docs/fuzz-tests.md)):
+```bash
+zig build test --fuzz
 ```
 
 ---

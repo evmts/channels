@@ -82,7 +82,7 @@ Not for: DeFi, permanent storage, spontaneous transactions with strangers
 
 **State channels didn't fail - they were solving the wrong problem.**
 
-The initial wave of state channel development (state channels, perun, plasma, go-nitro) focused on **scaling DeFi**: enabling high-frequency trading, micropayments, and financial applications. This required trust assumptions the technology was fundamentally poor at solving until Rollups fundamentally changed the architecture.
+The initial wave of state channel development (Connext, Perun, Plasma) focused on **scaling DeFi**: enabling high-frequency trading, micropayments, and financial applications. This required trust assumptions the technology was fundamentally poor at solving until Rollups fundamentally changed the architecture.
 
 - Exit problems made long term applications where state constantly grows challenging
 - As the value secured scale the cost to attack via unique attack vectors like not sharing data availability needed to form proofs become viable
@@ -112,36 +112,29 @@ The initial wave of state channel development (state channels, perun, plasma, go
 - ✅ **Instant finality required** - no waiting for block confirmation
 - ✅ **No composability needed** - game logic is self-contained
 
-### Reference code: go-nitro
+### Technical Requirements for op-stack Integration
 
-Go nitro is a golang implementation that subjectively is architected extremely well and one of the more modern state channel implementations. For this reason we have chosen it to serve as our primary reference code.
+State channels on op-stack L2s require WASM-based state derivation support. Current gaps we address:
 
-### Technical Gap: go-nitro Limitations
+1. **Application framework** - Need WASM runtime for off-chain game logic:
+   - Deterministic execution in disputes
+   - Rich expressiveness for complex rules
+   - Easy testing/debugging
 
-go-nitro provided solid state channel primitives but lacked:
+2. **Rich state management** - Need structured state beyond opaque bytes:
+   - Query game state (e.g., "which units in range?")
+   - Handle state exceeding memory via embedded DB
+   - Natural modeling of complex entities
 
-1. **No application framework** - Developers had to implement game logic in Solidity (`stateIsSupported()`) which is:
+3. **Event sourcing** - Need transparent state derivation:
+   - Debug state transitions via replay
+   - Complete audit trail
+   - Test scenarios via message log replay
 
-   - Expensive to execute on-chain during disputes
-   - Limited expressiveness for complex game rules
-   - Hard to test/debug
-
-2. **No rich state management** - `AppData` was opaque bytes:
-
-   - No querying game state (e.g., "which units are in range?")
-   - Full state had to fit in memory
-   - No natural way to model complex entities
-
-3. **No event sourcing** - Stored state snapshots:
-
-   - Hard to debug state transitions
-   - No audit trail
-   - Difficult to replay/test scenarios
-
-4. **No network effects** - No hub infrastructure or discovery:
-   - Players couldn't find each other
-   - No incentive for hub operators
-   - Cold start problem unsolved
+4. **Network effects** - Need hub infrastructure/discovery:
+   - Player matchmaking
+   - Hub operator incentives
+   - Solve cold start problem
 
 ### Opportunity: Event Sourcing + Embedded DB
 
@@ -299,15 +292,15 @@ SELECT player_id FROM players WHERE
 5. **Explicit allocators** - Zig's manual memory management for control
 6. **Comptime optimization** - Zero-cost abstractions via Zig's comptime
 
-**Learned from go-nitro:**
+**State channel best practices adopted:**
 
 - ✅ Objective pattern (state machines with `Crank()`)
 - ✅ Declarative side effects (messages/transactions returned, not executed)
 - ✅ WaitingFor enumeration (explicit blocking states)
 - ✅ Channel ownership tracking (one objective per channel)
-- ❌ Replace snapshots with event streams
-- ❌ Replace goroutines with structured concurrency
-- ❌ Replace interfaces with tagged unions
+- ✅ Event streams (transparent state derivation)
+- ✅ Structured concurrency (Zig async)
+- ✅ Tagged unions (type-safe variants)
 
 **Why Zig over Go:**
 
@@ -1205,7 +1198,7 @@ Alice ←═══════════ Virtual Channel ═══════
 
 **Smart Contracts (Solidity):**
 
-- **Copy from go-nitro:** `/packages/nitro-protocol/contracts/`
+- **Implement for op-stack:**
   - NitroAdjudicator.sol
   - ForceMove.sol
   - MultiAssetHolder.sol
@@ -1218,15 +1211,15 @@ Alice ←═══════════ Virtual Channel ═══════
 - **Web3:** viem + wagmi for Ethereum interactions
 - **WASM:** Load game reducer in browser for spectating/validation
 
-### 5.6 Architectural Patterns from go-nitro
+### 5.6 Architectural Patterns for State Channels
 
-**Based on comprehensive analysis of the go-nitro codebase, we identify key patterns to preserve, pain points to address, and testing strategies to adopt.**
+**Core patterns proven effective in production state channel implementations:**
 
-#### 5.6.1 Patterns to Preserve (Proven Architecture)
+#### 5.6.1 Patterns to Adopt (Proven Architecture)
 
-**Objective/Crank Pattern** (ADR 0001 - go-nitro)
+**Objective/Crank Pattern** (ADR 0001)
 
-The core abstraction in go-nitro is the "Objective" - a state machine representing a protocol (DirectFund, VirtualFund, etc.):
+The core abstraction is the "Objective" - a state machine representing a protocol (DirectFund, VirtualFund, etc.):
 
 ```go
 type Objective interface {
@@ -1282,7 +1275,7 @@ pub const CrankResult = struct {
 
 **Channel Ownership Model**
 
-go-nitro tracks which objective "owns" each channel:
+State channels track which objective "owns" each channel:
 
 ```go
 // In store:
@@ -1328,14 +1321,14 @@ type ConsensusChannel struct {
 **1. Snapshot-Based State (No Event Sourcing)**
 
 **Problem:**
-- go-nitro stores current state only (no history)
+- Traditional implementations store current state only (no history)
 - Can't explain how state was reached
 - Debugging requires reproducing bug from scratch
 - No audit trail for disputes
 
 **Impact:**
 ```go
-// go-nitro store
+// Traditional snapshot store
 GetObjective(id) -> Objective     // Latest state only
 SetObjective(id, obj) -> void     // Overwrites
 
@@ -1470,13 +1463,13 @@ test "virtual payment with hub" {
 
 #### 5.6.4 ADR Methodology
 
-Following go-nitro's lead (see `/go-nitro/.adr/`), we adopt Architectural Decision Records:
+Following state channel best practices, we adopt Architectural Decision Records:
 
-**Key ADRs from go-nitro:**
-- ADR-0001: Offchain Protocols as Flowcharts
-- ADR-0003: Consensus Ledger Channels
-- ADR-0004: Proposal Messaging (ordered processing)
-- ADR-0011: Persistent Storage (BuntDB choice)
+**Reference ADR patterns from prior implementations:**
+- Offchain Protocols as Flowcharts
+- Consensus Ledger Channels
+- Proposal Messaging (ordered processing)
+- Persistent Storage strategies
 
 **Our ADR process:**
 - ADRs in `/docs/adrs/`
@@ -1519,10 +1512,10 @@ Following go-nitro's lead (see `/go-nitro/.adr/`), we adopt Architectural Decisi
 ⚠️ Implement deposit safety logic correctly
 
 **References:**
-- go-nitro architecture: `/go-nitro/architecture.md`
-- Protocol implementations: `/go-nitro/protocols/`
-- Integration tests: `/go-nitro/node_test/`
-- ADRs: `/go-nitro/.adr/`
+- State channel architecture patterns
+- Protocol specification documents
+- Integration test methodologies
+- ADR best practices
 
 ---
 
@@ -1530,14 +1523,14 @@ Following go-nitro's lead (see `/go-nitro/.adr/`), we adopt Architectural Decisi
 
 ### 6.1 Core State Channel Engine (Zig)
 
-**Reference:** go-nitro `/node/engine/engine.go`
+**Reference:** State channel engine architecture
 
 **Requirements:**
 
 **R6.1.1 Event Loop**
 
 - MUST run in single thread (no race conditions)
-- MUST use Zig's async/await for I/O (file:line references below use go-nitro as inspiration)
+- MUST use Zig's async/await for I/O
 - MUST process events from 4 sources:
   1. API requests (user commands)
   2. Chain events (deposits, challenges)
@@ -1627,7 +1620,7 @@ Following go-nitro's lead (see `/go-nitro/.adr/`), we adopt Architectural Decisi
 
 **R6.2.2 State Structure**
 
-- MUST match go-nitro's State structure for on-chain compatibility
+- MUST use standard state channel State structure for on-chain compatibility
 - MUST include:
   ```zig
   pub const State = struct {
@@ -1642,7 +1635,7 @@ Following go-nitro's lead (see `/go-nitro/.adr/`), we adopt Architectural Decisi
   };
   ```
 - appData MUST encode message log (JSON array or MessagePack)
-- MUST hash state for signing using Ethereum ABI encoding (ref: `/channel/state/state.go:117`)
+- MUST hash state for signing using Ethereum ABI encoding
 
 **R6.2.3 Signature Handling**
 
@@ -1745,16 +1738,16 @@ Following go-nitro's lead (see `/go-nitro/.adr/`), we adopt Architectural Decisi
 
 ### 6.5 Smart Contracts (Solidity)
 
-**Reference:** go-nitro `/packages/nitro-protocol/contracts/`
+**Reference:** Standard state channel contracts for op-stack
 
 **Requirements:**
 
-**R6.5.1 Contract Reuse**
+**R6.5.1 Contract Implementation**
 
-- MUST use go-nitro's battle-tested contracts:
-  - NitroAdjudicator.sol (ref: `/packages/nitro-protocol/contracts/NitroAdjudicator.sol`)
-  - ForceMove.sol (ref: `/packages/nitro-protocol/contracts/ForceMove.sol`)
-  - MultiAssetHolder.sol (ref: `/packages/nitro-protocol/contracts/MultiAssetHolder.sol`)
+- MUST implement standard state channel contracts:
+  - NitroAdjudicator.sol (adjudication logic)
+  - ForceMove.sol (force move game)
+  - MultiAssetHolder.sol (asset management)
 - MUST NOT modify core logic (security risk)
 - MAY add new app contracts (custom validation logic)
 
@@ -2053,8 +2046,8 @@ Following go-nitro's lead (see `/go-nitro/.adr/`), we adopt Architectural Decisi
 │   Before: [Hub: 100, Bob: 100]                              │
 │   After:  [Hub: 90, Bob: 100, Guarantee: 10]                │
 │                                                              │
-│ (Uses consensus channel proposals - ref: go-nitro            │
-│  /protocols/virtualfund/virtualfund.go:396)                  │
+│ (Uses consensus channel proposals)                           │
+│                                                              │
 └──────────────────────────────────────────────────────────────┘
 
 ┌──────────────────────────────────────────────────────────────┐
@@ -2409,32 +2402,28 @@ We adopt a rigorous development methodology:
    - Single-threaded event dispatcher
    - DirectFund/DirectDefund objectives
    - Event store (in-memory for now)
-   - Reference: go-nitro `/node/engine/engine.go`
 
 2. **State & signature handling**
 
-   - State structure (compatible with go-nitro contracts)
+   - State structure (op-stack compatible)
    - secp256k1 signing/verification (via Zabi)
    - ABI encoding for hashing
-   - Reference: go-nitro `/channel/state/state.go`
 
 3. **P2P networking (basic)**
 
    - TCP transport (no libp2p yet)
    - Manual peer connection (IP + port)
    - Message serialization (JSON)
-   - Reference: go-nitro `/node/engine/messageservice/`
 
 4. **Chain service**
 
    - Ethereum RPC client (JSON-RPC over HTTP)
    - Event listening (polling, no WebSocket yet)
    - Transaction submission (deposit, challenge, withdraw)
-   - Reference: go-nitro `/node/engine/chainservice/eth_chainservice.go`
 
 5. **Smart contracts**
 
-   - Copy go-nitro contracts (NitroAdjudicator, ForceMove, MultiAssetHolder)
+   - Implement standard state channel contracts (NitroAdjudicator, ForceMove, MultiAssetHolder)
    - Deploy to local testnet (Hardhat)
    - TrivialApp (accepts all transitions) for testing
 
@@ -2442,6 +2431,40 @@ We adopt a rigorous development methodology:
    - Unit tests for core types (State, Signature, Objective)
    - Integration test: 2 nodes open/close ledger channel
    - Test against local blockchain
+
+
+### Event Surface Area
+
+**Complete specification:** [docs/architecture/event-types.md](../docs/architecture/event-types.md)
+
+The event store defines **20 events** across 4 domains as the sole source of truth for all state transitions:
+
+| Domain              | Events | Description                                                  |
+| ------------------- | ------ | ------------------------------------------------------------ |
+| **Objective Lifecycle** | 5      | `objective-created`, `objective-approved`, `objective-rejected`, `objective-cranked`, `objective-completed` |
+| **Channel State**       | 5      | `channel-created`, `state-signed`, `state-received`, `state-supported-updated`, `channel-finalized` |
+| **Chain Bridge**        | 6      | `deposit-detected`, `allocation-updated`, `challenge-registered`, `challenge-cleared`, `channel-concluded`, `withdraw-completed` |
+| **Messaging**           | 4      | `message-sent`, `message-received`, `message-acked`, `message-dropped` |
+
+**Event ID Derivation:**
+```
+event_id = keccak256("ev1|" + event_name + "|" + canonical_json(payload))
+```
+
+- **Canonical JSON:** Sorted keys, no whitespace, UTF-8 encoding, deterministic serialization
+- **Schemas:** JSON Schema 2020-12 definitions in `schemas/events/*.schema.json`
+- **Zig Types:** Union type in `src/event_store/events.zig` with per-event validation
+- **Tests:** 50+ tests with golden vectors in `testdata/events/`, >90% coverage
+
+**Causal Rules:**
+Each event specifies preconditions and postconditions enforcing state invariants:
+
+- **state-signed:** `turn_num = prev.turn_num + 1`, `signer ∈ participants`, signature valid
+- **state-supported-updated:** `supported_turn > prev_supported_turn`, `num_signatures ≥ threshold`
+- **challenge-registered:** `turn_num_record ≥ supported_turn`, finalization timer started
+
+**Versioning:**
+Events include `event_version` field (currently `1`) for schema evolution. Forward-compatible migration via version-aware deserializers.
 
 **Milestone:** Two Zig nodes can open a ledger channel, exchange signed states, close cooperatively.
 
@@ -2521,13 +2544,11 @@ We adopt a rigorous development methodology:
 
    - 3-party protocol implementation
    - Guarantee management in ledger channels
-   - Reference: go-nitro `/protocols/virtualfund/virtualfund.go`
 
 2. **Consensus channel (ledger updates)**
 
    - Leader/follower proposal system
    - Sign ledger state updates
-   - Reference: go-nitro `/channel/consensus_channel/consensus_channel.go`
 
 3. **Hub service**
 
@@ -2718,7 +2739,7 @@ We adopt a rigorous development methodology:
 
 ### Why Event Sourcing?
 
-**go-nitro stores state snapshots. Why switch to events?**
+**Traditional implementations store state snapshots. Why use events?**
 
 1. **Audit trail**
 
@@ -2891,7 +2912,7 @@ We adopt a rigorous development methodology:
 **A8: Smart Contract Bugs**
 
 - **Risk:** Reentrancy, overflow, logic errors
-- **Mitigation:** Use go-nitro's audited contracts (no modifications)
+- **Mitigation:** Use audited state channel contracts (minimal modifications)
 - **Verification:** External audit before mainnet deployment
 - **Monitoring:** Watch for unexpected on-chain activity
 
@@ -3061,10 +3082,8 @@ We adopt a rigorous development methodology:
 ### State Channels
 
 - **Nitro Protocol:** https://docs.statechannels.org/
-- **go-nitro (this codebase):** https://github.com/statechannels/go-nitro
-  - Core patterns: `/node/engine/engine.go`, `/protocols/*/`
-  - Objectives: `/protocols/interfaces.go`
-  - Consensus channels: `/channel/consensus_channel/`
+  - State channel protocol specification
+  - Objective pattern, consensus channels, virtual funding
 - **Lightning Network:** https://lightning.network/
   - Payment channels, routing, hub topology
   - Differences: Payments vs games, HTLC vs state channels

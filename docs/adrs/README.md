@@ -40,10 +40,10 @@
 
 **Context:**
 - Need to store state channel data durably
-- Options: Snapshots (go-nitro), Event sourcing, Hybrid
+- Options: Snapshots (traditional), Event sourcing, Hybrid
 
 **Options:**
-- **A) Snapshots:** Store latest state only (go-nitro approach)
+- **A) Snapshots:** Store latest state only (traditional approach)
 - **B) Event Sourcing:** Store events, derive state
 - **C) Hybrid:** Snapshots + recent events
 
@@ -174,11 +174,11 @@
 **Rationale:**
 - ✅ Smart contracts use `abi.encode()` - must match
 - ✅ Deterministic (same state → same bytes)
-- ✅ go-nitro compatible
+- ✅ State channel compatible
 - ✅ Well-specified (Solidity ABI spec)
 - ⚠️ Complex implementation
 
-**Validation:** Cross-test with go-nitro test vectors
+**Validation:** Cross-test with state channel test vectors
 
 **Status:** Planned (Phase 2, Week 1)
 
@@ -188,23 +188,23 @@
 
 ### **ADR-0006: Objective/Crank Pattern**
 
-**Decision:** Use flowchart-based state machines (Objective/Crank) from go-nitro
+**Decision:** Use flowchart-based state machines (Objective/Crank pattern)
 
 **Context:**
 - Need protocol state machine design
-- Options: Explicit FSM, Flowchart (go-nitro), Actor model
+- Options: Explicit FSM, Flowchart (proven pattern), Actor model
 
 **Options:**
 - **A) Explicit FSM:** Defined states/transitions
 - **B) Flowchart:** Implicit states, pure Crank function
 - **C) Actor model:** Message passing
 
-**Decision:** B (Flowchart/Crank pattern from go-nitro ADR-0001)
+**Decision:** B (Flowchart/Crank pattern - proven in state channel implementations)
 
 **Rationale:**
 - ✅ Flexible, handles complex flows
 - ✅ Restartable (pure functions)
-- ✅ Proven in go-nitro
+- ✅ Proven in production
 - ✅ WaitingFor computed from state
 - ⚠️ Less explicit than FSM (mitigated by docs)
 
@@ -238,7 +238,7 @@ pub fn crank(objective: Objective, event: Event) !CrankResult {
 - ✅ Pure objectives (testable without mocks)
 - ✅ Separation of concerns
 - ✅ Engine controls ordering/execution
-- ✅ Matches go-nitro pattern
+- ✅ Matches proven patterns
 
 **Side Effects:**
 ```zig
@@ -422,7 +422,7 @@ pub const SideEffect = union(enum) {
 - ✅ Sequence numbers detect issues
 - ⚠️ More complex (acceptable)
 
-**go-nitro:** Uses turn numbers for sequencing
+**Note:** State channels use turn numbers for sequencing
 
 **Status:** Planned (Phase 8, Week 1)
 
@@ -444,7 +444,7 @@ pub const SideEffect = union(enum) {
 **Decision:** B (At postfund)
 
 **Rationale:**
-- ✅ Matches go-nitro behavior
+- ✅ Standard behavior
 - ✅ Ledger channel funded (guarantees backed by real assets)
 - ✅ Clear semantics
 
@@ -561,7 +561,6 @@ All ADRs follow the structure defined in [0000-adrs.md](./0000-adrs.md):
 
 - **ADR Methodology:** [0000-adrs.md](./0000-adrs.md)
 - **Phase Planning:** [.claude/commands/README.md](../../.claude/commands/README.md)
-- **go-nitro ADRs:** [go-nitro/.adr/](../../go-nitro/.adr/)
 - **ADR Template:** [adr-template.md](../adr-template.md)
 
 ---
