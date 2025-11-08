@@ -1218,6 +1218,312 @@ Alice ←═══════════ Virtual Channel ═══════
 - **Web3:** viem + wagmi for Ethereum interactions
 - **WASM:** Load game reducer in browser for spectating/validation
 
+### 5.6 Architectural Patterns from go-nitro
+
+**Based on comprehensive analysis of the go-nitro codebase, we identify key patterns to preserve, pain points to address, and testing strategies to adopt.**
+
+#### 5.6.1 Patterns to Preserve (Proven Architecture)
+
+**Objective/Crank Pattern** (ADR 0001 - go-nitro)
+
+The core abstraction in go-nitro is the "Objective" - a state machine representing a protocol (DirectFund, VirtualFund, etc.):
+
+```go
+type Objective interface {
+    Crank(secretKey) (Objective, SideEffects, WaitingFor)
+    Approve() Objective
+    Reject() Objective
+    Update(payload) Objective
+    OwnsChannel(id) bool
+}
+```
+
+**Key insights:**
+- **Pure functions:** `Crank()` returns new objective + side effects (doesn't mutate)
+- **Flowchart model:** No explicit FSM states stored, computed from extended state
+- **Restartable:** Can call `Crank()` repeatedly until completes
+- **WaitingFor states:** Explicit enumeration of blocking conditions
+  - `WaitingForCompletePrefund`
+  - `WaitingForMyTurnToFund`
+  - `WaitingForTheirTurnToFund`
+  - `WaitingForCompletePostfund`
+  - etc.
+
+**Our Zig translation:**
+```zig
+pub const Objective = union(enum) {
+    direct_fund: DirectFundObjective,
+    direct_defund: DirectDefundObjective,
+    virtual_fund: VirtualFundObjective,
+    virtual_defund: VirtualDefundObjective,
+
+    pub fn crank(
+        self: *const Objective,
+        allocator: Allocator,
+        secret_key: []const u8,
+    ) !CrankResult {
+        return switch (self.*) {
+            .direct_fund => |obj| try obj.crank(allocator, secret_key),
+            // ... other protocols
+        };
+    }
+};
+
+pub const CrankResult = struct {
+    objective: Objective,
+    side_effects: SideEffects,
+    waiting_for: WaitingFor,
+};
+```
+
+**Why preserve:** Proven pattern, enables protocol composition, clear separation of concerns.
+
+---
+
+**Channel Ownership Model**
+
+go-nitro tracks which objective "owns" each channel:
+
+```go
+// In store:
+channelToObjective map[ChannelId]ObjectiveId
+
+// Only one objective can modify a channel at a time
+// Released when objective completes
+```
+
+**Benefits:**
+- Prevents concurrent modification bugs
+- Clear responsibility model
+- Easier to reason about channel lifecycle
+
+**Our approach:** Maintain this pattern using event store metadata.
+
+---
+
+**Consensus Channel Pattern** (Ledger Channels)
+
+Special handling for ledger channels that require coordinated updates:
+
+```go
+type ConsensusChannel struct {
+    leader   ParticipantId
+    follower ParticipantId
+    proposals Queue[SignedProposal]
+}
+```
+
+**Rules:**
+- Proposals must be processed in order (ADR 0004)
+- Leader/follower roles for proposal initiation
+- Guarantees managed through ledger updates
+- Used for virtual channel funding/defunding
+
+**Our approach:** Implement as special objective type with ordered event processing.
+
+---
+
+#### 5.6.2 Pain Points to Address
+
+**1. Snapshot-Based State (No Event Sourcing)**
+
+**Problem:**
+- go-nitro stores current state only (no history)
+- Can't explain how state was reached
+- Debugging requires reproducing bug from scratch
+- No audit trail for disputes
+
+**Impact:**
+```go
+// go-nitro store
+GetObjective(id) -> Objective     // Latest state only
+SetObjective(id, obj) -> void     // Overwrites
+
+// Missing: How did we get here?
+// Missing: What sequence of events occurred?
+```
+
+**Our solution:**
+- Event log as source of truth
+- State derived from events
+- Full audit trail preserved
+- Time-travel debugging
+
+---
+
+**2. Object Hydration Complexity**
+
+**Problem:**
+- Objectives stored without channel data
+- Must fetch channels separately on load
+- Error-prone (easy to forget hydration)
+
+```go
+// Load objective from disk (JSON)
+obj := decode(json)
+
+// Must manually hydrate with channel references
+obj = populateChannelData(obj, store)  // Easy to forget!
+```
+
+**Our solution:**
+- Events contain all context needed
+- No separate channel fetching
+- Reconstruction is self-contained
+
+---
+
+**3. Goroutine Complexity**
+
+**Problem:**
+- Complex concurrency with channels and goroutines
+- Hard to debug race conditions
+- Goroutine leaks possible
+- Non-deterministic ordering
+
+**Our solution:**
+- Zig's async/await for structured concurrency
+- Single-threaded event loop (deterministic)
+- Explicit control flow (no hidden concurrency)
+
+---
+
+**4. String-Based WaitingFor**
+
+**Problem:**
+```go
+type WaitingFor string  // Stringly typed!
+
+const (
+    WaitingForNothing = ""
+    WaitingForCompletePrefund = "WaitingForCompletePrefund"
+    // ... no compile-time checking
+)
+```
+
+**Our solution:**
+```zig
+pub const WaitingFor = union(enum) {
+    nothing,
+    complete_prefund: CompletePrefundInfo,
+    my_turn_to_fund: MyTurnInfo,
+    their_turn_to_fund: TheirTurnInfo,
+    // ... type-safe with payload
+};
+```
+
+---
+
+#### 5.6.3 Testing Strategies to Adopt
+
+**Integration Test Pattern** (from `/node_test/integration_test.go`):
+
+```go
+type TestCase struct {
+    Chain          ChainType        // Mock or Simulated
+    MessageService MessageServiceType
+    NumOfChannels  uint
+    NumOfHops      uint             // Virtual channel routing
+    NumOfPayments  uint
+}
+```
+
+**Key practices:**
+1. **Parameterized tests:** Run same logic with different configs
+2. **Test actors:** Reusable Alice/Bob/Hub/Irene personas
+3. **Deterministic fixtures:** Shared test data in `/internal/testdata/`
+4. **Mock vs Simulated:** Both lightweight mocks and full blockchain simulation
+
+**Our adoption:**
+```zig
+const TestScenario = struct {
+    chain: ChainType,
+    message_service: MessageServiceType,
+    num_channels: u32,
+    num_hops: u32,
+    num_payments: u32,
+
+    pub fn run(self: TestScenario, allocator: Allocator) !void {
+        // Parameterized test execution
+    }
+};
+
+test "virtual payment with hub" {
+    try TestScenario{
+        .chain = .mock,
+        .num_channels = 2,
+        .num_hops = 1,
+        .num_payments = 10,
+    }.run(testing.allocator);
+}
+```
+
+---
+
+**Property-Based Testing:**
+- Fuzz test objective state machines
+- Verify invariants (e.g., "sum of allocations == total funds")
+- Test serialization round-trips
+- Signature verification properties
+
+---
+
+#### 5.6.4 ADR Methodology
+
+Following go-nitro's lead (see `/go-nitro/.adr/`), we adopt Architectural Decision Records:
+
+**Key ADRs from go-nitro:**
+- ADR-0001: Offchain Protocols as Flowcharts
+- ADR-0003: Consensus Ledger Channels
+- ADR-0004: Proposal Messaging (ordered processing)
+- ADR-0011: Persistent Storage (BuntDB choice)
+
+**Our ADR process:**
+- ADRs in `/docs/adrs/`
+- Template in `/docs/adr-template.md`
+- Numbered sequentially (0001, 0002, ...)
+- Immutable once accepted (new ADRs supersede old)
+- See: `docs/adrs/0000-adrs.md` for methodology
+
+**Critical ADRs to write:**
+1. **ADR-0001:** Event Sourcing for State Management
+2. **ADR-0002:** Zig as Implementation Language
+3. **ADR-0003:** Message Serialization Format
+4. **ADR-0004:** WASM Runtime Choice
+5. **ADR-0005:** Snapshot Optimization Strategy
+
+---
+
+#### 5.6.5 Key Takeaways
+
+**Architectural Patterns to Preserve:**
+✅ Objective/Crank pattern (flowchart-based state machines)
+✅ Pure function objectives with side effects separation
+✅ Channel ownership model
+✅ Consensus channel leader/follower pattern
+✅ Multi-layered architecture (Engine/Store/Chain/Message)
+
+**Improvements Our Design Makes:**
+🚀 Event sourcing from day one (biggest differentiator)
+🚀 Binary serialization for performance
+🚀 Zig async/await instead of goroutines
+🚀 Strong typing for states (tagged unions)
+🚀 Formal verification considerations
+🚀 Better observability and monitoring
+
+**Critical Success Factors:**
+⚠️ Maintain objective purity (no side effects in Crank)
+⚠️ Ensure event log atomicity
+⚠️ Handle chain reorganizations correctly
+⚠️ Preserve proposal ordering in consensus channels
+⚠️ Implement deposit safety logic correctly
+
+**References:**
+- go-nitro architecture: `/go-nitro/architecture.md`
+- Protocol implementations: `/go-nitro/protocols/`
+- Integration tests: `/go-nitro/node_test/`
+- ADRs: `/go-nitro/.adr/`
+
 ---
 
 ## 6. DETAILED REQUIREMENTS
@@ -2052,7 +2358,47 @@ If counterparty finds invalid state:
 
 ## 8. IMPLEMENTATION ROADMAP
 
-### Phase 1: Core Engine (Months 1-3)
+**Implementation Philosophy:** Documentation-Driven, Test-Driven Development
+
+We adopt a rigorous development methodology:
+
+1. **Documentation First:** Write specs, ADRs, and API docs before code
+2. **Tests Second:** Write failing tests that define success criteria
+3. **Implementation Third:** Write code to pass tests
+4. **Validation Fourth:** Code review, performance testing, security review
+
+**Planning Framework:**
+
+- **Phase Templates:** Each phase follows `docs/phase-template.md` structure
+- **ADR Documentation:** Architectural decisions documented per `docs/adrs/0000-adrs.md`
+- **Phase Prompts:** Detailed phase plans in `.claude/commands/N_phase_*.md`
+- **Validation Gates:** Each phase has explicit success criteria and exit gates
+
+**Deliverables per Phase:**
+
+- ✅ **Documentation:** Architecture docs, API specs, ADRs
+- ✅ **Tests:** Unit tests (90%+ coverage), integration tests, benchmarks
+- ✅ **Code:** Implementation passing all tests
+- ✅ **Validation:** Code review, performance validation, demo
+
+**ADRs to Create Across Phases:**
+
+- **ADR-0001:** Event Sourcing for State Management (Phase 1)
+- **ADR-0002:** Zig as Implementation Language (Phase 1)
+- **ADR-0003:** Message Serialization Format (Phase 1)
+- **ADR-0004:** WASM Runtime Choice (Phase 2)
+- **ADR-0005:** Snapshot Optimization Strategy (Phase 2)
+- **ADR-0006:** PGlite Integration Approach (Phase 2)
+- **ADR-0007:** Virtual Channel Routing (Phase 3)
+- **ADR-0008:** Hub Economics and Fee Structure (Phase 3)
+- **ADR-0009:** Multi-Chain Deployment Strategy (Phase 4)
+- **ADR-0010:** Developer SDK Architecture (Phase 5)
+
+---
+
+### Phase 1: Event Sourcing Foundation & Core Engine (Months 1-3)
+
+**Phase Document:** `.claude/commands/1_phase_1_event_sourcing.md`
 
 **Goal:** Minimal viable state channel engine in Zig
 
