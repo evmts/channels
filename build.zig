@@ -24,6 +24,13 @@ pub fn build(b: *std.Build) void {
     // This creates a module, which represents a collection of source files alongside
     // some compilation options, such as optimization mode and linked system libraries.
     // Zig modules are the preferred way of making Zig code available to consumers.
+    // Get zabi dependency
+    const zabi = b.dependency("zabi", .{
+        .target = target,
+        .optimize = optimize,
+    });
+    const zabi_module = zabi.module("zabi");
+
     // addModule defines a module that we intend to make available for importing
     // to our consumers. We must give it a name because a Zig package can expose
     // multiple modules and consumers will need to be able to specify which
@@ -39,6 +46,9 @@ pub fn build(b: *std.Build) void {
         // Later on we'll use this module as the root module of a test executable
         // which requires us to specify a target.
         .target = target,
+        .imports = &.{
+            .{ .name = "zabi", .module = zabi_module },
+        },
     });
 
     // Here we define an executable. An executable needs to have a root module
