@@ -2,6 +2,22 @@
 
 **Meta:** P2 | Deps: P1 | Owner: Core
 
+## Zig 0.15 Crypto/ABI
+
+**std.crypto native:**
+- `std.crypto.ecc.Secp256k1` - curve ops, basePoint
+- `std.crypto.sign.ecdsa.EcdsaSecp256k1Sha256` - signing (NOT recovery)
+- `std.crypto.hash.sha3.Keccak256` - Ethereum hash
+
+**No recovery in stdlib** - need external lib (libsecp256k1 C bindings or zabi)
+
+**u256:**
+- Native: `u256` primitive (max u65535)
+- Ethereum ABI: represent as `[32]u8` for encoding
+- BigInt: `std.math.big.int.Managed` for arbitrary precision
+
+**Rec:** Use zabi lib (Ethereum ABI + secp256k1 recovery) over manual C bindings
+
 ## Summary
 
 Channel state primitives: State/FixedPart/VariablePart structures, secp256k1 signatures, ABI encoding, ChannelId generation. Foundation for all protocols - without state types, cannot represent/verify channel updates. Preserves go-nitro proven model, replaces strings with tagged unions, integrates event sourcing.
@@ -204,7 +220,9 @@ pub fn emitStateReceived(store: *EventStore, state: State, sig: Signature, from:
 
 ## Dependencies
 
-**Req:** P1 (EventStore), Zig 0.15+, zabi (secp256k1 + Keccak256)
+**Req:** P1 (EventStore), Zig 0.15+
+**External:** zabi (https://github.com/Raiden1411/zabi) - Ethereum ABI + secp256k1 recovery + Keccak256
+**Alt:** libsecp256k1 C bindings + manual ABI (more work, same result)
 
 ## Risks
 

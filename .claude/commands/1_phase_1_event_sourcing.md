@@ -2,6 +2,19 @@
 
 **Meta:** P1 | Deps: None | Owner: Core
 
+## Zig 0.15 Constraints
+
+**NO async/await** - not until 0.16 (3-4mo). Sync code + explicit threading only.
+
+**Thread-safe stdlib:**
+- `std.Thread.RwLock` (prefer over Mutex) - multi-reader, single-writer
+- `std.Thread.Pool` - managed thread pool vs manual spawn
+- `std.atomic.Value(T)` - lock-free counters
+- `std.segmented_list.SegmentedList` - stable pointers (vs ArrayList realloc invalidation)
+- GPA needs `.thread_safe = true` config
+
+**ArrayList→SegmentedList:** ArrayList realloc invalidates ptrs, breaks subscriber refs to events. SegmentedList stable ptrs.
+
 ## Summary
 
 Core innovation vs go-nitro: append-only event log = source-of-truth (not snapshots). Deterministic state reconstruction from events. Enables audit trails, time-travel debug, provable state derivation. Foundation - all later phases emit/replay events.
@@ -38,7 +51,7 @@ Core innovation vs go-nitro: append-only event log = source-of-truth (not snapsh
 Protocol Layer → emits events
   ↓
 EventStore: append-only log + subscribers
-  - EventLog: ArrayList (P1) → RocksDB (P4)
+  - EventLog: SegmentedList (P1) → RocksDB (P4)
   - Dispatcher: notify subscribers
   ↓
 StateReconstructor: fold events → state
@@ -63,9 +76,9 @@ SnapshotManager: cache every N events
 
 **ADR-0003: Storage Backend P1**
 - Q: Where store P1?
-- Opts: A) In-mem ArrayList | B) RocksDB | C) SQLite
+- Opts: A) SegmentedList | B) ArrayList | C) RocksDB
 - Rec: A (P1) → RocksDB (P4)
-- Why: Simple, fast dev, easy test, validate sourcing vs ⚠️ ephemeral (ok testing)
+- Why: Stable ptrs (subscriber safety), no realloc, simple vs ⚠️ ephemeral (ok testing)
 
 ## Data Structures
 
@@ -124,26 +137,31 @@ pub const EventOffset = u64;
 ```zig
 pub const EventStore = struct {
     allocator: Allocator,
-    events: ArrayList(Event),
+    events: std.segmented_list.SegmentedList(Event, 1024),  // stable ptrs
     subscribers: ArrayList(EventCallback),
-    mutex: Mutex,  // thread-safe writes
+    rw_lock: std.Thread.RwLock,  // multi-reader safe
+    count: std.atomic.Value(u64),  // lock-free len
 
     pub fn init(a: Allocator) !*EventStore;
 
     // Append atomically, return offset
     pub fn append(self: *Self, event: Event) !EventOffset {
-        self.mutex.lock();
-        defer self.mutex.unlock();
-        const offset = self.events.items.len;
-        try self.events.append(event);
-        for (self.subscribers.items) |cb| cb(event, offset);
+        self.rw_lock.lock();
+        defer self.rw_lock.unlock();
+        const offset = self.count.fetchAdd(1, .monotonic);
+        try self.events.append(self.allocator, event);
+        for (self.subscribers.items) |cb| cb(self.events.at(offset).*, offset);
         return offset;
     }
 
-    pub fn readFrom(self: *Self, offset: EventOffset) []const Event;
-    pub fn readRange(self: *Self, start: EventOffset, end: EventOffset) []const Event;
+    pub fn readFrom(self: *Self, offset: EventOffset) *const Event {
+        self.rw_lock.lockShared();
+        defer self.rw_lock.unlockShared();
+        return self.events.at(offset);
+    }
+    pub fn readRange(self: *Self, start: EventOffset, end: EventOffset) Iterator;
     pub fn subscribe(self: *Self, cb: EventCallback) !SubscriptionId;
-    pub fn len(self: *Self) EventOffset;
+    pub fn len(self: *Self) EventOffset { return self.count.load(.monotonic); }
     pub fn deinit(self: *Self) void;
 };
 
@@ -189,12 +207,12 @@ pub const Snapshot = struct {
 
 **Tasks:**
 - T1: Event types (S, 2-4h)
-- T2: EventStore impl (M, 1-2d) - ArrayList, mutex, append
-- T3: Atomic append (M, 1-2d) - thread-safe
+- T2: EventStore impl (M, 1-2d) - SegmentedList, RwLock, atomic count
+- T3: Atomic append (M, 1-2d) - thread-safe, stable ptrs
 - T4: Subscriptions (M, 1-2d) - callbacks
 - T5: StateReconstructor (L, 3-5d) - fold logic
 - T6: SnapshotManager (L, 3-5d) - create/restore
-- T7: EventStore tests (L, 3-5d)
+- T7: EventStore tests (L, 3-5d) - use Thread.Pool for concurrency tests
 - T8: Reconstructor tests (L, 3-5d)
 - T9: Integration test (M, 1-2d) - append→reconstruct
 - T10: Benchmarks (M, 1-2d)
@@ -227,12 +245,23 @@ test "event serialization roundtrip" {
 }
 
 test "append atomic concurrent" {
+    var gpa = std.heap.GeneralPurposeAllocator(.{ .thread_safe = true }){};
+    defer _ = gpa.deinit();
+    const a = gpa.allocator();
+
     var store = try EventStore.init(a);
     defer store.deinit();
-    // Spawn 10 threads × 100 appends
-    var threads: [10]Thread = undefined;
-    for (&threads) |*t| t.* = try Thread.spawn(.{}, appendMany, .{store, 100});
-    for (threads) |t| t.join();
+    var pool: std.Thread.Pool = undefined;
+    try pool.init(.{ .allocator = a });
+    defer pool.deinit();
+
+    // 10 tasks × 100 appends = 1000 events
+    var wg: std.Thread.WaitGroup = .{};
+    for (0..10) |_| {
+        pool.spawn(appendMany, .{ &wg, store, 100 }) catch unreachable;
+        wg.start();
+    }
+    wg.wait();
     try testing.expectEqual(@as(u64, 1000), store.len());
 }
 
@@ -288,7 +317,7 @@ fn benchReconstruct(b: *Benchmark) !void {
 **Create:**
 - `docs/adrs/0001-event-sourcing-strategy.md`
 - `docs/adrs/0002-event-serialization-format.md`
-- `docs/adrs/0003-in-memory-event-log.md`
+- `docs/adrs/0003-segmented-list-event-log.md` - stable ptrs, RwLock, atomic count
 - `docs/architecture/event-sourcing.md` - overview, design, diagrams
 - `docs/architecture/event-types.md` - catalog all 15+ types
 
@@ -305,8 +334,9 @@ fn benchReconstruct(b: *Benchmark) !void {
 |------|------|--------|------------|
 | Reconstruct perf >100ms | M | H | Benchmark early, snapshot cache, optimize |
 | Event log unbounded growth | M | M | Snapshot + prune (defer P4), <10K events P1 |
-| Thread-safety bugs | L | H | Mutex all writes, extensive concurrent tests |
+| Thread-safety bugs | L | H | RwLock all ops, Thread.Pool tests, GPA thread_safe |
 | JSON size issues | L | M | Switch MessagePack if >100MB (decision pt ADR-0002) |
+| SegmentedList overhead | L | L | 1024 events/segment minimizes waste, benchmark |
 
 ## Deliverables
 
@@ -332,7 +362,7 @@ fn benchReconstruct(b: *Benchmark) !void {
 
 ```zig
 pub fn main() !void {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    var gpa = std.heap.GeneralPurposeAllocator(.{ .thread_safe = true }){};
     defer _ = gpa.deinit();
     const a = gpa.allocator();
 

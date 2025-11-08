@@ -2,6 +2,25 @@
 
 **Meta:** P7 | Deps: P2, P3 | Owner: Core
 
+## Zig Ethereum RPC
+
+**std.http client:**
+- Built-in HTTP client/server in std
+- Needs allocator pre-allocated for response body
+- `std.json` for request/response parsing
+
+**zabi (RECOMMENDED):**
+- Full Ethereum lib: RPC, ABI, RLP, tx parsing, wallet
+- Custom JSON parser for RPC runtime deser/ser
+- Already includes secp256k1 + Keccak (dep for P2)
+
+**JSON-RPC libs:**
+- `zigjr` - lightweight JSON-RPC 2.0 (std.json)
+- `zig-json-rpc` - protocol impl
+- Roll own with std.http + std.json (more work)
+
+**Rec:** Use zabi - covers P2 (crypto) + P7 (RPC) in one dep
+
 ## Summary
 
 Ethereum chain integration - deposit detection, tx submission, event listening, challenge handling. Critical - channels need on-chain funding/finalization. RPC client, event subscriptions, tx building, reorg handling. Replaces P3 mock chain with real Ethereum connection.
@@ -112,8 +131,9 @@ pub fn onDeposited(self: *ChainService, callback: DepositCallback) !void;
 
 ## Dependencies
 
-**Req:** P2 (State/Sig for txs), P3 (Objective side effects)
-**External:** Ethereum node (Geth/Anvil), NitroAdjudicator contract, Zig HTTP client
+**Req:** P2 (State/Sig), P3 (Objectives), Zig 0.15+
+**External:** zabi (RPC + tx + ABI), Ethereum node (Geth/Anvil), NitroAdjudicator.sol
+**Alt:** std.http + std.json + JSON-RPC lib (fragmented, more work)
 
 ## Risks
 

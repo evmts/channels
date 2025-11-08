@@ -2,6 +2,20 @@
 
 **Meta:** P4 | Deps: P1 | Owner: Core
 
+## Zig RocksDB/C Interop
+
+**C interop:**
+- `@cImport/@cInclude` - import C headers
+- `std.c.free` - free C-allocated mem (NOT allocator.free)
+- `c_allocator` - libc malloc wrapper (misleading name)
+- C libs hide allocator, manage own mem
+
+**RocksDB libs:**
+- `Syndica/rocksdb-zig` - idiomatic hand-written bindings
+- `jiacai2050/zig-rocksdb` - vendored librocksdb v9.0.0
+
+**Mem safety:** C allocations need `std.c.free`, Zig allocations need `allocator.free`. Never mix.
+
 ## Summary
 
 Replace in-memory event log with RocksDB. Implements crash recovery via replay, snapshots for fast startup, WAL for atomicity. Critical - without persistence, all state lost on restart (unacceptable production). Swaps storage backend while maintaining EventStore interface.
@@ -114,8 +128,9 @@ pub fn readFrom(self: *Self, offset: EventOffset) ![]Event;
 
 ## Dependencies
 
-**Req:** P1 (EventStore interface)
-**External:** RocksDB C lib, Zig bindings
+**Req:** P1 (EventStore interface), Zig 0.15+
+**External:** Syndica/rocksdb-zig (rec) OR jiacai2050/zig-rocksdb
+**Note:** defer/errdefer critical for C interop cleanup
 
 ## Risks
 

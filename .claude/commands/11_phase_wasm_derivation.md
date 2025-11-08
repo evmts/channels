@@ -2,6 +2,20 @@
 
 **Meta:** P11 | Deps: P1, P2, P9 | Owner: Core
 
+## Zig WASM Features
+
+**Compile TO wasm:**
+- `zig build-exe -target wasm32-wasi` - official LLVM backend
+- Tiny binaries (no GC, exceptions, aggressive DCE)
+- Fast cold start, predictable perf
+
+**Embed wasm runtime:**
+- `wasmer-zig-api` (zig-wasm/wasmer-zig-api) - WASM/WASI bindings, updated 2025
+- `wasm-zig` (zigwasm/wasm-zig) - common C API bindings
+- wasmtime bindings less mature
+
+**Rec:** Use wasmer-zig-api (active, full WASI). Zig-built WASM = tiny, fast.
+
 ## Summary
 
 Core innovation - deterministic state derivation from message logs via WASM reducers + embedded PostgreSQL. Enables rich application state (SQL queries), transparent derivation (anyone can replay), compact on-chain representation (message log vs full state). Optional but high value - enables game/application use cases beyond payments. Most technically complex: WASM runtime integration, PGlite embedding, determinism guarantees, performance optimization.

@@ -2,6 +2,23 @@
 
 **Meta:** P6 | Deps: P2, P3 | Owner: Core
 
+## Zig 0.15 Networking
+
+**std.net (current - being deprecated):**
+- `std.net.Address.initIp4` / `initIp6`
+- `std.net.listen()` → `std.net.Server` → `.accept()` → `Connection`
+- `std.net.tcpConnectToAddress(peer)` - client
+- `std.net.Stream` - read/write
+
+**std.Io.net (NEW in 0.16 - not ready):**
+- All std.net deleted → std.Io.net
+- `std.Io.Threaded` has net + fs ops
+- Async runtimes: zio lib (Go-style coroutines)
+
+**P6 approach:** Use std.net (sync) + Thread.Pool for concurrent conns. Migrate std.Io post-0.16.
+
+**MessagePack:** Need external lib (std lacks). Search zig package manager.
+
 ## Summary
 
 Peer-to-peer messaging layer - direct message exchange between participants. Transport (TCP or libp2p), message codec (serialization), peer discovery, delivery guarantees. Critical - protocols need to exchange signed states. Replaces P3/P5 mock message service with real network stack.
@@ -119,8 +136,9 @@ pub fn onMessage(self: *P2PService, callback: MessageCallback) !void;
 
 ## Dependencies
 
-**Req:** P2 (State/Sig for messages), P3 (Objective side effects)
-**External:** Zig std.net (TCP), MessagePack library
+**Req:** P2 (State/Sig), P3 (Objectives), P1 (Thread.Pool for concurrent conns)
+**External:** std.net (sync TCP, deprecated in 0.16 but OK), MessagePack lib (TBD)
+**Future:** Migrate std.Io.net post-0.16, consider zio for async
 
 ## Risks
 
