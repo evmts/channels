@@ -1,964 +1,353 @@
-# Phase 1: Event Sourcing Foundation
+# P1: Event Sourcing Foundation
 
-<phase-metadata>
-**Phase Number:** 1
-**Phase Name:** Event Sourcing Foundation
-**Status:** Planning
-**Dependencies:** None (this is the foundation)
-**Estimated Duration:** 4-5 weeks
-**Owner:** Core Team
-</phase-metadata>
+**Meta:** P1 | Deps: None | Owner: Core
 
----
+## Summary
 
-## 1. Executive Summary
+Core innovation vs go-nitro: append-only event log = source-of-truth (not snapshots). Deterministic state reconstruction from events. Enables audit trails, time-travel debug, provable state derivation. Foundation - all later phases emit/replay events.
 
-<summary>
-Phase 1 establishes the **event-sourcing foundation** that is our core innovation over go-nitro's snapshot-based approach. We implement an append-only event log as the source of truth for all state channel data, with deterministic state reconstruction from events. This is critical because without this foundation, we cannot achieve the debuggability, auditability, and time-travel capabilities that differentiate our system from existing state channel implementations. All subsequent phases build upon this event-sourced architecture - channels, objectives, protocols, and persistence all emit events that are logged, replayed, and reconstructed.
+**vs go-nitro:** Events → derive state (transparent, verifiable) vs snapshots (opaque)
 
-**Key Innovation:** Unlike go-nitro which stores state snapshots, we store the **events that led to that state**. Anyone can replay the event log to verify state correctness - no hidden state transitions, complete transparency.
-</summary>
+## Objectives
 
----
+- OBJ-1: Event type hierarchy (15+ types)
+- OBJ-2: Append-only log, atomic writes, thread-safe
+- OBJ-3: State reconstruction engine (fold over events)
+- OBJ-4: Snapshots (perf optimization, not source-of-truth)
+- OBJ-5: Tests 90%+, benchmarks <100ms/1K events
 
-## 2. Objectives & Success Criteria
+## Success Criteria
 
-### 2.1 Primary Objectives
+**Done when:**
+- 15+ event types defined
+- EventStore: atomic append, thread-safe reads
+- Reconstruct state from events deterministically
+- Snapshots every N events (N=1000)
+- 50+ tests, 90%+ cov
+- Benchmark: <100ms reconstruct 1K events, <50MB for 10K
+- 3 ADRs approved (sourcing strategy, serialization, storage)
+- Docs: architecture + API
+- Demo: event log → state reconstruction
 
-<objectives>
-- **OBJ-1:** Define complete event type hierarchy for state channel operations
-- **OBJ-2:** Implement append-only event log with atomic append guarantees
-- **OBJ-3:** Build state reconstruction engine that derives state from events
-- **OBJ-4:** Create snapshot mechanism as performance optimization (not source of truth)
-- **OBJ-5:** Validate event sourcing with comprehensive test suite (90%+ coverage)
-</objectives>
+**Exit gates:** All above + code review (2+) + integration test passes
 
-### 2.2 Success Criteria
-
-<success-criteria>
-**Definition of Done:** Phase 1 is complete when we have a working event-sourced system that can:
-1. Append events atomically to a log
-2. Reconstruct state by replaying events
-3. Create snapshots for performance
-4. Survive crashes without data loss
-5. Pass all tests and benchmarks
-
-| Criterion | Validation Method | Target |
-|-----------|------------------|--------|
-| Event types defined | Code review + docs | 15+ event types covering objectives/channels |
-| Atomic append works | Unit test: concurrent appends | 100% success rate |
-| Event log append-only enforced | Unit test: modification attempts fail | 0 modifications allowed |
-| State reconstruction correct | Integration test: replay vs direct | 100% match |
-| Reconstruction performance | Benchmark: 1000 events | <100ms P95 |
-| Snapshot creation works | Unit test: snapshot + restore | Exact state match |
-| Memory efficiency | Benchmark: 10K events | <50MB RAM |
-| Documentation complete | Doc review | Architecture + API docs exist |
-| ADRs written | ADR review | 3 ADRs approved |
-
-**Exit Criteria (Must ALL be met):**
-- [ ] All unit tests passing (target: 50+ tests, 90%+ coverage)
-- [ ] Integration test: Append 1000 events, reconstruct state correctly
-- [ ] Benchmark: Reconstruction <100ms for 1000 events
-- [ ] Code review approved by 2+ engineers
-- [ ] Performance benchmarks meet targets
-- [ ] ADR-0001, ADR-0002, ADR-0003 written and approved
-- [ ] Documentation complete: architecture doc + API reference
-- [ ] Demo: Show event log → state reconstruction to team
-</success-criteria>
-
----
-
-## 3. Architecture & Design
-
-### 3.1 System Architecture
-
-<architecture>
-**Component Diagram:**
-
-```
-┌─────────────────────────────────────────────────┐
-│         Application / Protocol Layer            │
-│    (Objectives, Channels - Phase 2+)            │
-└──────────────────┬──────────────────────────────┘
-                   │ emits events
-                   ↓
-┌─────────────────────────────────────────────────┐
-│              Event Store (Phase 1)              │
-│  ┌──────────────┐         ┌──────────────────┐ │
-│  │  Event Log   │         │  Event Dispatcher│ │
-│  │  (append)    │         │  (subscribe)     │ │
-│  └──────┬───────┘         └────────┬─────────┘ │
-│         │                          │           │
-│         ↓                          ↓           │
-│  ┌──────────────────────────────────────────┐  │
-│  │     In-Memory Storage (Phase 1)          │  │
-│  │     (RocksDB in Phase 4)                 │  │
-│  └──────────────────────────────────────────┘  │
-└─────────────────────────────────────────────────┘
-                   │
-                   ↓ reads events
-┌─────────────────────────────────────────────────┐
-│        State Reconstruction Engine              │
-│  ┌──────────────┐         ┌──────────────────┐ │
-│  │  Projections │         │  Snapshots       │ │
-│  │  (rebuild)   │         │  (optimize)      │ │
-│  └──────────────┘         └──────────────────┘ │
-└─────────────────────────────────────────────────┘
-```
+## Architecture
 
 **Components:**
-
-1. **Event Store**
-   - **Responsibility:** Persist events, provide event stream
-   - **Interface:** `append(event)`, `readFrom(offset)`, `subscribe(callback)`
-   - **Implementation:** In-memory ArrayList (Phase 1), RocksDB (Phase 4)
-
-2. **Event Log**
-   - **Responsibility:** Maintain append-only sequence of events
-   - **Guarantees:** Atomicity, ordering, durability (Phase 4)
-   - **Storage:** Sequential array indexed by offset
-
-3. **Event Dispatcher**
-   - **Responsibility:** Notify subscribers when events appended
-   - **Pattern:** Observer pattern with callbacks
-   - **Use case:** Real-time UI updates, metrics
-
-4. **State Reconstruction Engine**
-   - **Responsibility:** Derive current state from event log
-   - **Algorithm:** Fold/reduce over events
-   - **Optimization:** Cache last reconstructed state
-
-5. **Snapshot Manager**
-   - **Responsibility:** Create/restore snapshots for performance
-   - **Strategy:** Snapshot every N events (N=1000 initially)
-   - **Trade-off:** Storage space vs reconstruction speed
-
-**Data Flow:**
-
 ```
-1. Objective emits event
-   ↓
-2. EventStore.append(event)
-   ↓
-3. Event written to log (append-only)
-   ↓
-4. Subscribers notified (async)
-   ↓
-5. State reconstruction requested
-   ↓
-6. Fold over events since last snapshot
-   ↓
-7. Return reconstructed state
+Protocol Layer → emits events
+  ↓
+EventStore: append-only log + subscribers
+  - EventLog: ArrayList (P1) → RocksDB (P4)
+  - Dispatcher: notify subscribers
+  ↓
+StateReconstructor: fold events → state
+SnapshotManager: cache every N events
 ```
-</architecture>
 
-### 3.2 Key Design Decisions (ADRs)
+**Flow:** Event → append → notify subscribers → read → reconstruct
 
-<architectural-decisions>
-### **ADR-0001: Event Sourcing as State Management Strategy**
+## ADRs
 
-- **Question:** How do we store state channel data?
-- **Options:**
-  - **A) Snapshots** (like go-nitro): Store latest state only
-  - **B) Event Sourcing**: Store events, derive state
-  - **C) Hybrid**: Store snapshots + recent events
-- **Recommendation:** B (Event Sourcing) with snapshots as optimization
-- **Rationale:**
-  - ✅ Complete audit trail for debugging
-  - ✅ Time-travel to any historical state
-  - ✅ Transparent state derivation (anyone can verify)
-  - ✅ Natural fit for state machines (events = transitions)
-  - ⚠️ Requires reconstruction cost (mitigated by caching)
-- **Consequences:**
-  - Event log is source of truth, not snapshots
-  - All state changes must be modeled as events
-  - Reconstruction must be deterministic
-- **Status:** To be written in Week 1
+**ADR-0001: Event Sourcing Strategy**
+- Q: How store state?
+- Opts: A) Snapshots (go-nitro) | B) Events | C) Hybrid
+- Rec: B + snapshots as optimization
+- Why: Audit trail, time-travel, transparent, debuggable vs ⚠️ reconstruct cost (mitigated cache)
 
----
+**ADR-0002: Event Serialization**
+- Q: Format?
+- Opts: A) JSON | B) MessagePack | C) Custom binary
+- Rec: A (P1), revisit P4 if >100MB or parse >1s
+- Why: Debug (cat log readable), std.json, schema evolution vs ⚠️ size/speed (ok <10K events)
 
-### **ADR-0002: Event Serialization Format**
+**ADR-0003: Storage Backend P1**
+- Q: Where store P1?
+- Opts: A) In-mem ArrayList | B) RocksDB | C) SQLite
+- Rec: A (P1) → RocksDB (P4)
+- Why: Simple, fast dev, easy test, validate sourcing vs ⚠️ ephemeral (ok testing)
 
-- **Question:** How do we serialize events to disk/memory?
-- **Options:**
-  - **A) JSON**: Human-readable, debuggable
-  - **B) MessagePack**: Binary, compact
-  - **C) Custom Binary**: Maximum efficiency
-  - **D) Cap'n Proto**: Zero-copy deserialization
-- **Recommendation:** A (JSON) for Phase 1, reconsider in Phase 4
-- **Rationale:**
-  - ✅ Easy debugging (can cat event log and read it)
-  - ✅ Zig has good JSON support (`std.json`)
-  - ✅ Schema evolution easier (can add fields)
-  - ⚠️ Larger size than binary (acceptable for Phase 1)
-  - ⚠️ Slower parsing (acceptable for <10K events)
-- **Decision point:** If event logs exceed 100MB or parsing >1s, switch to MessagePack
-- **Status:** To be written in Week 1
-
----
-
-### **ADR-0003: In-Memory Event Log for Phase 1**
-
-- **Question:** Where do we store events in Phase 1?
-- **Options:**
-  - **A) In-memory ArrayList**: Simple, fast
-  - **B) RocksDB from start**: Durable
-  - **C) SQLite**: Queryable
-- **Recommendation:** A (In-memory) for Phase 1, **RocksDB in Phase 4**
-- **Rationale:**
-  - ✅ Simplest possible implementation for validation
-  - ✅ Fast development iteration
-  - ✅ Easier testing (no disk I/O)
-  - ✅ Phase 1 focus: prove event sourcing works, not durability
-  - ⚠️ Data lost on crash (acceptable for Phase 1 testing)
-- **Phase 4 Migration:** Replace ArrayList with RocksDB backend
-- **Status:** To be written in Week 1
-
-</architectural-decisions>
-
-### 3.3 Data Structures
-
-<data-structures>
-### Event Type Hierarchy
-
-**Core Event Union:**
+## Data Structures
 
 ```zig
-/// All events in the system
-/// Events are immutable once created
+// Event union (all types)
 pub const Event = union(enum) {
-    // Objective lifecycle events
     objective_created: ObjectiveCreatedEvent,
     objective_approved: ObjectiveApprovedEvent,
     objective_rejected: ObjectiveRejectedEvent,
     objective_completed: ObjectiveCompletedEvent,
-
-    // Channel state events
     state_signed: StateSignedEvent,
     state_received: StateReceivedEvent,
-
-    // Chain events
     deposit_detected: DepositDetectedEvent,
     challenge_registered: ChallengeRegisteredEvent,
     channel_concluded: ChannelConcludedEvent,
-
-    // Message events
     message_sent: MessageSentEvent,
     message_received: MessageReceivedEvent,
-
-    // System events
     snapshot_created: SnapshotCreatedEvent,
 
-    /// Serialize event to JSON
-    pub fn toJson(self: Event, allocator: Allocator) ![]const u8 {
-        return try std.json.stringifyAlloc(allocator, self, .{});
-    }
-
-    /// Deserialize event from JSON
-    pub fn fromJson(allocator: Allocator, json: []const u8) !Event {
-        return try std.json.parseFromSliceLeaky(Event, allocator, json, .{});
-    }
-
-    /// Get event timestamp
-    pub fn timestamp(self: Event) i64 {
-        return switch (self) {
-            .objective_created => |e| e.timestamp,
-            .state_signed => |e| e.timestamp,
-            // ... all event types have timestamp
-            else => unreachable,
-        };
-    }
+    pub fn toJson(self: Event, a: Allocator) ![]u8;
+    pub fn fromJson(a: Allocator, json: []u8) !Event;
+    pub fn timestamp(self: Event) i64;
 };
-```
 
-**Event Structures:**
-
-```zig
-/// Emitted when a new objective is created
+// Example event
 pub const ObjectiveCreatedEvent = struct {
-    event_id: EventId,          // Unique event identifier
-    objective_id: ObjectiveId,  // Which objective
-    objective_type: ObjectiveType, // DirectFund, VirtualFund, etc.
-    timestamp: i64,             // Unix timestamp (ms)
-};
-
-/// Emitted when a state is signed by us
-pub const StateSignedEvent = struct {
-    event_id: EventId,
-    channel_id: ChannelId,
-    state_hash: [32]u8,         // Hash of signed state
-    turn_num: u64,              // State turn number
-    signature: Signature,        // Our signature
+    event_id: EventId,        // hash(content)
+    objective_id: ObjectiveId,
+    objective_type: ObjectiveType,
     timestamp: i64,
 };
 
-/// Emitted when we receive a signed state from counterparty
-pub const StateReceivedEvent = struct {
+pub const StateSignedEvent = struct {
     event_id: EventId,
     channel_id: ChannelId,
     state_hash: [32]u8,
     turn_num: u64,
-    from_address: Address,      // Who sent it
-    signature: Signature,        // Their signature
+    signature: Signature,
     timestamp: i64,
 };
 
-// ... more event types
-```
-
-**Supporting Types:**
-
-```zig
-/// Unique event identifier (hash of event content)
+// Types
 pub const EventId = [32]u8;
-
-/// Event log offset (position in log)
 pub const EventOffset = u64;
-
-/// Event sequence (ordered list)
-pub const EventSequence = std.ArrayList(Event);
 ```
 
 **Invariants:**
-- ✅ Events are immutable once created
-- ✅ Event IDs are unique (hash of content)
-- ✅ Event log is append-only (never delete/modify)
-- ✅ Events have monotonic timestamps within a sequence
-- ✅ Event deserialization is deterministic (same bytes → same event)
+- Events immutable once created
+- EventIDs unique (hash content)
+- Log append-only (no delete/modify)
+- Timestamps monotonic within sequence
+- Deserialization deterministic
 
-</data-structures>
-
-### 3.4 Interfaces & APIs
-
-<apis>
-### EventStore Interface
+## APIs
 
 ```zig
-/// Event Store - append-only event log
-/// Thread-safe for concurrent reads, synchronized writes
 pub const EventStore = struct {
     allocator: Allocator,
-    events: std.ArrayList(Event),
-    subscribers: std.ArrayList(EventCallback),
-    mutex: std.Thread.Mutex,  // Protects writes
+    events: ArrayList(Event),
+    subscribers: ArrayList(EventCallback),
+    mutex: Mutex,  // thread-safe writes
 
-    /// Initialize new event store
-    pub fn init(allocator: Allocator) !*EventStore {
-        var store = try allocator.create(EventStore);
-        store.* = .{
-            .allocator = allocator,
-            .events = std.ArrayList(Event).init(allocator),
-            .subscribers = std.ArrayList(EventCallback).init(allocator),
-            .mutex = .{},
-        };
-        return store;
-    }
+    pub fn init(a: Allocator) !*EventStore;
 
-    /// Append event atomically to the log
-    /// Returns: Event offset in log
-    /// Errors: OutOfMemory
-    pub fn append(self: *EventStore, event: Event) !EventOffset {
+    // Append atomically, return offset
+    pub fn append(self: *Self, event: Event) !EventOffset {
         self.mutex.lock();
         defer self.mutex.unlock();
-
         const offset = self.events.items.len;
         try self.events.append(event);
-
-        // Notify subscribers (async)
-        for (self.subscribers.items) |callback| {
-            callback(event, offset);
-        }
-
+        for (self.subscribers.items) |cb| cb(event, offset);
         return offset;
     }
 
-    /// Read events starting from offset
-    /// Returns: Slice of events (valid until next append)
-    pub fn readFrom(self: *EventStore, offset: EventOffset) []const Event {
-        if (offset >= self.events.items.len) {
-            return &[_]Event{};
-        }
-        return self.events.items[offset..];
-    }
-
-    /// Read events in range [start, end)
-    pub fn readRange(
-        self: *EventStore,
-        start: EventOffset,
-        end: EventOffset
-    ) []const Event {
-        if (start >= self.events.items.len) {
-            return &[_]Event{};
-        }
-        const actual_end = @min(end, self.events.items.len);
-        return self.events.items[start..actual_end];
-    }
-
-    /// Subscribe to new events
-    /// Callback invoked for each new event (async)
-    pub fn subscribe(
-        self: *EventStore,
-        callback: EventCallback
-    ) !SubscriptionId {
-        self.mutex.lock();
-        defer self.mutex.unlock();
-
-        try self.subscribers.append(callback);
-        return self.subscribers.items.len - 1;
-    }
-
-    /// Get total number of events
-    pub fn len(self: *EventStore) EventOffset {
-        return self.events.items.len;
-    }
-
-    /// Cleanup resources
-    pub fn deinit(self: *EventStore) void {
-        self.events.deinit();
-        self.subscribers.deinit();
-        self.allocator.destroy(self);
-    }
+    pub fn readFrom(self: *Self, offset: EventOffset) []const Event;
+    pub fn readRange(self: *Self, start: EventOffset, end: EventOffset) []const Event;
+    pub fn subscribe(self: *Self, cb: EventCallback) !SubscriptionId;
+    pub fn len(self: *Self) EventOffset;
+    pub fn deinit(self: *Self) void;
 };
 
-/// Callback signature for event subscribers
-pub const EventCallback = *const fn (event: Event, offset: EventOffset) void;
+pub const EventCallback = *const fn(Event, EventOffset) void;
 
-/// Subscription identifier
-pub const SubscriptionId = usize;
-```
-
-### State Reconstructor Interface
-
-```zig
-/// State Reconstructor - derives state from events
 pub const StateReconstructor = struct {
     allocator: Allocator,
     event_store: *EventStore,
-    cache: StateCache,  // Optimization
+    cache: StateCache,
 
-    /// Reconstruct objective state from events
-    pub fn reconstructObjective(
-        self: *StateReconstructor,
-        objective_id: ObjectiveId,
-    ) !ObjectiveState {
-        // Find all events for this objective
-        const events = try self.getObjectiveEvents(objective_id);
+    pub fn init(a: Allocator, store: *EventStore) !*Self;
+
+    // Reconstruct objective from events
+    pub fn reconstructObjective(self: *Self, id: ObjectiveId) !ObjectiveState {
+        const events = try self.getObjectiveEvents(id);
         defer self.allocator.free(events);
-
-        // Fold over events to build state
-        var state = ObjectiveState.init(objective_id);
-        for (events) |event| {
-            state = try state.apply(event);
-        }
-
+        var state = ObjectiveState.init(id);
+        for (events) |e| state = try state.apply(e);
         return state;
     }
 
-    /// Reconstruct channel state from events
-    pub fn reconstructChannel(
-        self: *StateReconstructor,
-        channel_id: ChannelId,
-    ) !ChannelState {
-        // Similar to reconstructObjective
-        // ...
-    }
-
-    // Helper: Filter events for specific objective
-    fn getObjectiveEvents(
-        self: *StateReconstructor,
-        objective_id: ObjectiveId,
-    ) ![]Event {
-        var filtered = std.ArrayList(Event).init(self.allocator);
-        errdefer filtered.deinit();
-
-        const all_events = self.event_store.readFrom(0);
-        for (all_events) |event| {
-            if (eventBelongsToObjective(event, objective_id)) {
-                try filtered.append(event);
-            }
-        }
-
-        return try filtered.toOwnedSlice();
-    }
+    pub fn reconstructChannel(self: *Self, id: ChannelId) !ChannelState;
+    fn getObjectiveEvents(self: *Self, id: ObjectiveId) ![]Event;
 };
-```
 
-### Snapshot Manager Interface
-
-```zig
-/// Snapshot Manager - performance optimization
 pub const SnapshotManager = struct {
     allocator: Allocator,
-    snapshot_interval: usize,  // Snapshot every N events
-    snapshots: std.AutoHashMap(EventOffset, Snapshot),
+    interval: usize,  // default 1000
+    snapshots: AutoHashMap(EventOffset, Snapshot),
 
-    /// Create snapshot at current event log position
-    pub fn createSnapshot(
-        self: *SnapshotManager,
-        event_store: *EventStore,
-        offset: EventOffset,
-    ) !void {
-        // Reconstruct state up to offset
-        // Serialize state
-        // Store snapshot
-        // Emit SnapshotCreatedEvent
-    }
-
-    /// Get latest snapshot before offset
-    pub fn getLatestSnapshot(
-        self: *SnapshotManager,
-        before_offset: EventOffset,
-    ) ?Snapshot {
-        // Find most recent snapshot <= before_offset
-    }
+    pub fn createSnapshot(self: *Self, store: *EventStore, offset: EventOffset) !void;
+    pub fn getLatestSnapshot(self: *Self, before: EventOffset) ?Snapshot;
 };
 
 pub const Snapshot = struct {
-    offset: EventOffset,       // Events up to this offset included
+    offset: EventOffset,
     timestamp: i64,
-    data: []const u8,          // Serialized state
+    data: []const u8,  // serialized state
 };
 ```
 
-**API Design Principles:**
-- ✅ Explicit error handling (Zig error unions)
-- ✅ Explicit allocation (pass allocator)
-- ✅ Resource cleanup (deinit required)
-- ✅ Type safety (no void pointers)
-- ✅ Const correctness (mark read-only params const)
-</apis>
+## Implementation
 
----
+**Tasks:**
+- T1: Event types (S, 2-4h)
+- T2: EventStore impl (M, 1-2d) - ArrayList, mutex, append
+- T3: Atomic append (M, 1-2d) - thread-safe
+- T4: Subscriptions (M, 1-2d) - callbacks
+- T5: StateReconstructor (L, 3-5d) - fold logic
+- T6: SnapshotManager (L, 3-5d) - create/restore
+- T7: EventStore tests (L, 3-5d)
+- T8: Reconstructor tests (L, 3-5d)
+- T9: Integration test (M, 1-2d) - append→reconstruct
+- T10: Benchmarks (M, 1-2d)
+- T11: ADRs 0001-0003 (M, 1-2d)
+- T12: Architecture docs (M, 1-2d)
+- T13: API docs (M, 1-2d)
 
-## 4. Implementation Plan
+**Path:** T1→T2→T3→T5→T7→T8→T9→Demo
 
-### 4.1 Work Breakdown
+**Effort:** ~20d → 4wk + buffer
 
-<work-breakdown>
-| Task ID | Description | Est. | Dependencies | Priority |
-|---------|-------------|------|--------------|----------|
-| **TASK-1** | Define event type hierarchy (Event union + struct definitions) | S | None | P0 |
-| **TASK-2** | Implement EventStore (in-memory ArrayList backend) | M | TASK-1 | P0 |
-| **TASK-3** | Implement atomic append with locking | M | TASK-2 | P0 |
-| **TASK-4** | Implement event subscription/notification | M | TASK-2 | P1 |
-| **TASK-5** | Implement StateReconstructor (fold over events) | L | TASK-2 | P0 |
-| **TASK-6** | Implement SnapshotManager (create/restore) | L | TASK-5 | P1 |
-| **TASK-7** | Write unit tests for EventStore | L | TASK-3 | P0 |
-| **TASK-8** | Write unit tests for StateReconstructor | L | TASK-5 | P0 |
-| **TASK-9** | Write integration test (append → reconstruct) | M | TASK-7, TASK-8 | P0 |
-| **TASK-10** | Write performance benchmarks | M | TASK-9 | P1 |
-| **TASK-11** | Write ADR-0001, ADR-0002, ADR-0003 | M | None | P0 |
-| **TASK-12** | Write architecture documentation | M | ALL | P0 |
-| **TASK-13** | Write API reference documentation | M | ALL | P1 |
+## Schedule
 
-**Estimation Key:**
-- **S (Small):** 2-4 hours
-- **M (Medium):** 1-2 days
-- **L (Large):** 3-5 days
+**W1 (Docs):** ADRs 0001-0003, architecture docs, API specs
+**W2 (Core):** Event types, EventStore, atomic append, subscriptions
+**W3 (Reconstruct):** StateReconstructor, unit tests
+**W4 (Optimize):** Snapshots, integration tests, benchmarks
+**W5 (Validate):** Code review, perf validation, demo
 
-**Priority:**
-- **P0:** Must have (blocks other work)
-- **P1:** Should have (important but not blocking)
+## Testing
 
-**Critical Path:** TASK-1 → TASK-2 → TASK-3 → TASK-5 → TASK-7 → TASK-8 → TASK-9 → Demo
-
-**Total Estimated Effort:** ~20 days → 4 weeks with buffer
-</work-breakdown>
-
-### 4.2 Implementation Sequence
-
-<implementation-sequence>
-### Week 1: Documentation & Design
-
-**Days 1-2: ADR Writing**
-- Write ADR-0001: Event Sourcing Strategy
-- Write ADR-0002: Event Serialization Format
-- Write ADR-0003: In-Memory Event Log
-- Get ADRs reviewed and approved
-
-**Days 3-5: Architecture Documentation**
-- Write `docs/architecture/event-sourcing.md`
-- Document event type catalog
-- Create API specifications
-- Write code examples
-
-**Deliverable:** Complete design docs + approved ADRs
-
----
-
-### Week 2: Core Implementation
-
-**Days 1-2: Event Types (TASK-1)**
-```zig
-// File: src/event_store/events.zig
-pub const Event = union(enum) {
-    objective_created: ObjectiveCreatedEvent,
-    // ... all event types
-};
-```
-
-**Days 3-4: EventStore (TASK-2, TASK-3)**
-```zig
-// File: src/event_store/store.zig
-pub const EventStore = struct {
-    pub fn init(...) !*EventStore { ... }
-    pub fn append(...) !EventOffset { ... }
-    pub fn readFrom(...) []const Event { ... }
-};
-```
-
-**Day 5: Event Subscription (TASK-4)**
-```zig
-pub fn subscribe(callback) !SubscriptionId { ... }
-```
-
-**Deliverable:** Working EventStore with tests
-
----
-
-### Week 3: State Reconstruction & Testing
-
-**Days 1-3: StateReconstructor (TASK-5)**
-```zig
-// File: src/event_store/reconstructor.zig
-pub fn reconstructObjective(...) !ObjectiveState {
-    // Fold over events
-}
-```
-
-**Days 4-5: Unit Tests (TASK-7, TASK-8)**
-- EventStore append tests
-- Concurrent append tests
-- Reconstruction correctness tests
-- Edge case tests
-
-**Deliverable:** State reconstruction working + comprehensive tests
-
----
-
-### Week 4: Optimization & Validation
-
-**Days 1-2: Snapshots (TASK-6)**
-```zig
-// File: src/event_store/snapshot.zig
-pub const SnapshotManager = struct {
-    pub fn createSnapshot(...) !void { ... }
-};
-```
-
-**Days 3-4: Integration Tests & Benchmarks (TASK-9, TASK-10)**
-- End-to-end: append → reconstruct
-- Performance: 1000 events <100ms
-- Memory: Track allocation
-
-**Day 5: Documentation Polish (TASK-12, TASK-13)**
-- Complete API docs
-- Add examples
-- Review all docs
-
-**Deliverable:** Phase 1 complete and validated
-
----
-
-### Week 5: Code Review & Demo
-
-**Days 1-2: Code Review**
-- Address review feedback
-- Refactor for clarity
-- Fix any issues
-
-**Days 3-4: Performance Validation**
-- Run benchmarks
-- Optimize hot paths if needed
-- Verify all targets met
-
-**Day 5: Demo & Acceptance**
-- Live demo to team
-- Show event log → state reconstruction
-- Get stakeholder sign-off
-
-**Deliverable:** Phase 1 accepted, ready for Phase 2
-
-</implementation-sequence>
-
----
-
-## 5. Testing Strategy
-
-### 5.1 Unit Tests
-
-<unit-tests>
-**Coverage Target:** 90%+
-
-**Test Categories:**
-
-### Event Serialization Tests
-
+**Unit (50+ tests, 90%+ cov):**
 ```zig
 test "event serialization roundtrip" {
-    const allocator = std.testing.allocator;
-
-    const original = Event{
-        .objective_created = .{
-            .event_id = generateEventId(),
-            .objective_id = ObjectiveId.generate(),
-            .objective_type = .DirectFund,
-            .timestamp = std.time.milliTimestamp(),
-        },
-    };
-
-    // Serialize
-    const json = try original.toJson(allocator);
-    defer allocator.free(json);
-
-    // Deserialize
-    const deserialized = try Event.fromJson(allocator, json);
-
-    // Verify exact match
-    try testing.expectEqual(original, deserialized);
+    const e = Event{ .objective_created = ... };
+    const json = try e.toJson(a);
+    defer a.free(json);
+    const decoded = try Event.fromJson(a, json);
+    try testing.expectEqual(e, decoded);
 }
-```
 
-### EventStore Append Tests
-
-```zig
-test "append increases event count" {
-    var store = try EventStore.init(testing.allocator);
+test "append atomic concurrent" {
+    var store = try EventStore.init(a);
     defer store.deinit();
-
-    const event = testEvent();
-
-    try testing.expectEqual(@as(EventOffset, 0), store.len());
-
-    const offset = try store.append(event);
-
-    try testing.expectEqual(@as(EventOffset, 0), offset);
-    try testing.expectEqual(@as(EventOffset, 1), store.len());
+    // Spawn 10 threads × 100 appends
+    var threads: [10]Thread = undefined;
+    for (&threads) |*t| t.* = try Thread.spawn(.{}, appendMany, .{store, 100});
+    for (threads) |t| t.join();
+    try testing.expectEqual(@as(u64, 1000), store.len());
 }
 
-test "append is atomic under concurrent access" {
-    var store = try EventStore.init(testing.allocator);
-    defer store.deinit();
-
-    // Spawn 10 threads, each appending 100 events
-    const num_threads = 10;
-    const events_per_thread = 100;
-
-    var threads: [num_threads]std.Thread = undefined;
-    for (&threads) |*thread| {
-        thread.* = try std.Thread.spawn(.{}, appendMany, .{
-            store, events_per_thread
-        });
-    }
-
-    for (threads) |thread| {
-        thread.join();
-    }
-
-    // Should have exactly 1000 events, no duplicates/losses
-    try testing.expectEqual(
-        @as(EventOffset, num_threads * events_per_thread),
-        store.len()
-    );
-}
-
-fn appendMany(store: *EventStore, count: usize) void {
-    var i: usize = 0;
-    while (i < count) : (i += 1) {
-        _ = store.append(testEvent()) catch unreachable;
-    }
-}
-```
-
-### State Reconstruction Tests
-
-```zig
-test "reconstruction produces correct state" {
-    var store = try EventStore.init(testing.allocator);
-    defer store.deinit();
-
-    var reconstructor = try StateReconstructor.init(testing.allocator, store);
-    defer reconstructor.deinit();
-
-    const objective_id = ObjectiveId.generate();
-
-    // Emit sequence of events
-    try store.append(Event{ .objective_created = .{
-        .event_id = generateEventId(),
-        .objective_id = objective_id,
-        .objective_type = .DirectFund,
-        .timestamp = 1000,
-    }});
-
-    try store.append(Event{ .objective_approved = .{
-        .event_id = generateEventId(),
-        .objective_id = objective_id,
-        .timestamp = 2000,
-    }});
-
-    // Reconstruct state
-    const state = try reconstructor.reconstructObjective(objective_id);
-
-    // Verify state matches expected
+test "reconstruction correct" {
+    var store = try EventStore.init(a);
+    var reconstructor = try StateReconstructor.init(a, store);
+    const obj_id = ObjectiveId.generate();
+    _ = try store.append(Event{ .objective_created = ...obj_id... });
+    _ = try store.append(Event{ .objective_approved = ...obj_id... });
+    const state = try reconstructor.reconstructObjective(obj_id);
     try testing.expectEqual(ObjectiveStatus.Approved, state.status);
-    try testing.expectEqual(objective_id, state.id);
 }
 ```
 
-**Additional Test Scenarios:**
-- ✅ Empty event log → empty reconstruction
-- ✅ Event filtering (only relevant events)
-- ✅ Out-of-order timestamp handling
-- ✅ Memory cleanup (no leaks)
-- ✅ Error handling (malformed JSON)
-
-</unit-tests>
-
-### 5.2 Integration Tests
-
-<integration-tests>
-**Scenarios:**
-
-### End-to-End: Append → Reconstruct
-
+**Integration:**
 ```zig
-test "integration: full event sourcing flow" {
-    // Setup
-    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
-    defer arena.deinit();
-    const allocator = arena.allocator();
-
-    var store = try EventStore.init(allocator);
-    defer store.deinit();
-
-    var reconstructor = try StateReconstructor.init(allocator, store);
-    defer reconstructor.deinit();
-
-    // Simulate objective lifecycle
+test "full event sourcing flow" {
+    var store = try EventStore.init(a);
+    var reconstructor = try StateReconstructor.init(a, store);
     const obj_id = ObjectiveId.generate();
 
-    // 1. Create objective
-    _ = try store.append(Event{ .objective_created = .{
-        .event_id = generateEventId(),
-        .objective_id = obj_id,
-        .objective_type = .DirectFund,
-        .timestamp = 1000,
-    }});
+    // Lifecycle: create → approve → complete
+    _ = try store.append(Event{ .objective_created = ... });
+    _ = try store.append(Event{ .objective_approved = ... });
+    _ = try store.append(Event{ .objective_completed = ... });
 
-    // 2. Approve objective
-    _ = try store.append(Event{ .objective_approved = .{
-        .event_id = generateEventId(),
-        .objective_id = obj_id,
-        .timestamp = 2000,
-    }});
-
-    // 3. Complete objective
-    _ = try store.append(Event{ .objective_completed = .{
-        .event_id = generateEventId(),
-        .objective_id = obj_id,
-        .timestamp = 3000,
-    }});
-
-    // Reconstruct and verify
     const state = try reconstructor.reconstructObjective(obj_id);
-
     try testing.expectEqual(ObjectiveStatus.Completed, state.status);
     try testing.expectEqual(@as(usize, 3), state.event_count);
 }
 ```
 
-### Snapshot + Recovery
-
+**Benchmarks:**
 ```zig
-test "integration: snapshot and recovery" {
-    // ... setup ...
-
-    // Append 1000 events
+fn benchAppend(b: *Benchmark) !void {
+    var store = try EventStore.init(b.allocator);
+    defer store.deinit();
+    b.reset();
     var i: usize = 0;
-    while (i < 1000) : (i += 1) {
-        _ = try store.append(testEvent());
-    }
+    while (i < 10000) : (i += 1) _ = try store.append(testEvent());
+}
+// Target: <1ms/event
 
-    // Create snapshot at 1000
-    var snapshot_mgr = try SnapshotManager.init(allocator);
-    defer snapshot_mgr.deinit();
-
-    try snapshot_mgr.createSnapshot(store, 1000);
-
-    // Append 500 more events
-    i = 0;
-    while (i < 500) : (i += 1) {
-        _ = try store.append(testEvent());
-    }
-
-    // Reconstruct from snapshot (should only replay 500 events)
-    const start_time = std.time.milliTimestamp();
-    const state = try reconstructFromSnapshot(snapshot_mgr, store);
-    const duration = std.time.milliTimestamp() - start_time;
-
-    // Should be faster than replaying all 1500
-    try testing.expect(duration < 50); // <50ms
+fn benchReconstruct(b: *Benchmark) !void {
+    // Setup: 1000 events
+    // Measure: reconstruction time
+    // Target: <100ms P95
 }
 ```
 
-</integration-tests>
+## Docs
 
-### 5.3 Performance Benchmarks
+**Create:**
+- `docs/adrs/0001-event-sourcing-strategy.md`
+- `docs/adrs/0002-event-serialization-format.md`
+- `docs/adrs/0003-in-memory-event-log.md`
+- `docs/architecture/event-sourcing.md` - overview, design, diagrams
+- `docs/architecture/event-types.md` - catalog all 15+ types
+
+**Code docs:** All public funcs, complex algos, examples
+
+## Dependencies
+
+**Req:** None (foundation)
+**External:** Zig 0.15+, std.json
+
+## Risks
+
+| Risk | Prob | Impact | Mitigation |
+|------|------|--------|------------|
+| Reconstruct perf >100ms | M | H | Benchmark early, snapshot cache, optimize |
+| Event log unbounded growth | M | M | Snapshot + prune (defer P4), <10K events P1 |
+| Thread-safety bugs | L | H | Mutex all writes, extensive concurrent tests |
+| JSON size issues | L | M | Switch MessagePack if >100MB (decision pt ADR-0002) |
+
+## Deliverables
+
+**Code:** `src/event_store/{events,store,reconstructor,snapshot}.zig` + tests
+**Docs:** 3 ADRs, architecture docs, API reference
+**Validation:** Coverage report (90%+), benchmarks (<100ms), integration test passes
+
+## Validation Gates
+
+**G1 (Design→Code):** ADRs approved, API reviewed, test strategy OK
+**G2 (During):** 2+ reviewers, no criticals, cov met
+**G3 (Pre-Done):** CI green, perf met, integration OK
+**G4 (Accept):** Demo, deliverables in, docs published, sign-off
+
+## Refs
+
+- ADRs: 0001-0003 (to write)
+- Phases: P4 (RocksDB migration)
+- External: go-nitro/node/engine/store/ (snapshot approach - contrast)
+- PRD: §4.1 Event Sourcing
+
+## Example
 
 ```zig
-const benchmark = @import("benchmark");
+pub fn main() !void {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer _ = gpa.deinit();
+    const a = gpa.allocator();
 
-// Benchmark: Append performance
-fn benchAppend(b: *benchmark.Benchmark) !void {
-    var store = try EventStore.init(b.allocator);
+    var store = try EventStore.init(a);
     defer store.deinit();
 
-    const event = testEvent();
+    // Append events
+    const obj_id = ObjectiveId.generate();
+    _ = try store.append(Event{ .objective_created = .{...obj_id...} });
+    _ = try store.append(Event{ .objective_approved = .{...obj_id...} });
 
-    b.reset();
+    // Reconstruct
+    var reconstructor = try StateReconstructor.init(a, store);
+    const state = try reconstructor.reconstructObjective(obj_id);
 
-    var i: usize = 0;
-    while (i < 10000) : (i += 1) {
-        _ = try store.append(event);
-    }
+    std.debug.print("State: {s}, Events: {}\n", .{@tagName(state.status), state.event_count});
 }
-
-// Benchmark: Reconstruction performance
-fn benchReconstruct(b: *benchmark.Benchmark) !void {
-    // Setup: 1000 events in store
-    var store = try EventStore.init(b.allocator);
-    defer store.deinit();
-
-    var i: usize = 0;
-    while (i < 1000) : (i += 1) {
-        _ = try store.append(testEvent());
-    }
-
-    var reconstructor = try StateReconstructor.init(b.allocator, store);
-    defer reconstructor.deinit();
-
-    b.reset();
-
-    // Measure reconstruction time
-    _ = try reconstructor.reconstructObjective(test_objective_id);
-}
-
-// Target: <100ms for 1000 events
 ```
-
----
-
-_(Continued in next section due to length)_
-
-## Summary
-
-Phase 1 establishes the event-sourcing foundation that differentiates our system. With a comprehensive test suite, clear ADRs, and proven performance, we create the bedrock for all future phases.
-
-**Key Deliverables:**
-- ✅ Working event log with atomic appends
-- ✅ State reconstruction from events
-- ✅ Snapshot optimization
-- ✅ 90%+ test coverage
-- ✅ Complete documentation
-
-**Ready for Phase 2:** Core Channel State & Signatures
