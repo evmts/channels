@@ -9,14 +9,15 @@
 - `std.crypto.sign.ecdsa.EcdsaSecp256k1Sha256` - signing (NOT recovery)
 - `std.crypto.hash.sha3.Keccak256` - Ethereum hash
 
-**No recovery in stdlib** - need external lib (libsecp256k1 C bindings or zabi)
+**No recovery in stdlib** - need external lib (voltaire/primitives provides complete solution)
 
 **u256:**
 - Native: `u256` primitive (max u65535)
 - Ethereum ABI: represent as `[32]u8` for encoding
 - BigInt: `std.math.big.int.Managed` for arbitrary precision
 
-**Rec:** Use zabi lib (Ethereum ABI + secp256k1 recovery) over manual C bindings
+**Rec:** Use voltaire/primitives (Ethereum ABI + secp256k1 recovery) - proven in guillotine-mini
+**⚠️ Security:** Voltaire crypto marked UNAUDITED - use for testing/development, plan audit before production
 
 ## Summary
 
@@ -221,8 +222,55 @@ pub fn emitStateReceived(store: *EventStore, state: State, sig: Signature, from:
 ## Dependencies
 
 **Req:** P1 (EventStore), Zig 0.15+
-**External:** zabi (https://github.com/Raiden1411/zabi) - Ethereum ABI + secp256k1 recovery + Keccak256
-**Alt:** libsecp256k1 C bindings + manual ABI (more work, same result)
+**External:** voltaire/primitives (https://github.com/evmts/primitives)
+**Modules:** `primitives` (Address, AbiEncoding), `crypto` (secp256k1, Keccak256), `precompiles` (unused)
+**Integration pattern:** See ../guillotine-mini/build.zig.zon for proven setup
+**Local dev:** ../voltaire cloned locally for reference
+**⚠️ Security:** Crypto implementation marked UNAUDITED by voltaire - acceptable for P2 testing, audit required for production
+
+**Voltaire integration:**
+```bash
+# Fetch dependency
+zig fetch --save=primitives https://github.com/evmts/primitives/archive/refs/heads/main.tar.gz
+```
+
+**build.zig pattern:**
+```zig
+const primitives_dep = b.dependency("primitives", .{
+    .target = target,
+    .optimize = optimize,
+});
+const primitives_mod = primitives_dep.module("primitives");
+const crypto_mod = primitives_dep.module("crypto");
+const precompiles_mod = primitives_dep.module("precompiles");
+
+// Add to module imports
+.imports = &.{
+    .{ .name = "primitives", .module = primitives_mod },
+    .{ .name = "crypto", .module = crypto_mod },
+    .{ .name = "precompiles", .module = precompiles_mod },
+},
+```
+
+**Code usage:**
+```zig
+const primitives = @import("primitives");
+const crypto_pkg = @import("crypto");
+const Address = primitives.Address.Address;
+const Hash = crypto_pkg.Hash;
+const Crypto = crypto_pkg.Crypto;
+const abi = primitives.AbiEncoding;
+
+// ChannelId = keccak256(encodePacked(fixedPart))
+const encoded = try abi.encodePacked(allocator, &abi_values);
+const channel_id = Hash.keccak256(encoded);
+
+// Sign state hash
+const sig = try Crypto.unaudited_signHash(state_hash, private_key);
+
+// Recover signer
+const addr = try Crypto.unaudited_recoverAddress(state_hash, signature);
+```
 
 ## Risks
 
@@ -230,7 +278,8 @@ pub fn emitStateReceived(store: *EventStore, state: State, sig: Signature, from:
 |--|--|--|--|
 |ABI encoding bugs|M|H|Cross-test vs reference implementations, contract vectors|
 |Sig verify wrong recovery|M|H|Test vs ethers.js, proven lib|
-|Keccak256 incorrect|L|H|Use tested lib (zabi)|
+|Keccak256 incorrect|L|H|Use tested lib (voltaire)|
+|Voltaire crypto unaudited|L|M|Explicitly mark P2 as development/testing only; document audit requirement for production|
 |secp256k1 integration complex|M|M|2 days allocated, test thoroughly|
 
 ## Deliverables
@@ -241,7 +290,7 @@ pub fn emitStateReceived(store: *EventStore, state: State, sig: Signature, from:
 
 ## Validation Gates
 
-- G1: ADRs approved, API designed, zabi integrated
+- G1: ADRs approved, API designed, voltaire integrated
 - G2: Code review (2+), tests pass, 90%+ cov
 - G3: Cross-impl passes, benchmarks met, events work
 - G4: Demo complete, docs published, P3 unblocked
@@ -251,6 +300,8 @@ pub fn emitStateReceived(store: *EventStore, state: State, sig: Signature, from:
 **Phases:** P1 (Events)
 **ADRs:** 0004 (Sig), 0005 (ABI), 0006 (ChannelId)
 **External:** State channel implementations, Ethereum ABI spec, EIP-191, secp256k1 spec
+**Reference Implementation:** ../guillotine-mini - proven voltaire integration
+**Voltaire Examples:** ../voltaire/examples/signature_recovery.zig - secp256k1 usage patterns
 
 ## Example
 
