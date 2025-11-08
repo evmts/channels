@@ -166,7 +166,7 @@ pub fn onMessage(self: *P2PService, callback: MessageCallback) !void;
 
 **Phases:** P2 (State), P3 (Objectives)
 **ADRs:** 0010 (Transport), 0011 (Codec)
-**External:** go-nitro `/node/engine/messageservice/`, libp2p
+**External:** State channel messaging patterns, libp2p
 
 ## Example
 

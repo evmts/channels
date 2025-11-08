@@ -132,7 +132,7 @@ pub fn onDeposited(self: *ChainService, callback: DepositCallback) !void;
 ## Dependencies
 
 **Req:** P2 (State/Sig), P3 (Objectives), Zig 0.15+
-**External:** zabi (RPC + tx + ABI), Ethereum node (Geth/Anvil), NitroAdjudicator.sol
+**External:** zabi (RPC + tx + ABI), Ethereum node (Geth/Anvil), op-stack compatible adjudicator contracts
 **Alt:** std.http + std.json + JSON-RPC lib (fragmented, more work)
 
 ## Risks
@@ -162,7 +162,7 @@ pub fn onDeposited(self: *ChainService, callback: DepositCallback) !void;
 
 **Phases:** P2 (State), P3 (Objectives)
 **ADRs:** 0012 (Confirmation depth)
-**External:** go-nitro `/node/engine/chainservice/`, Ethereum JSON-RPC, NitroAdjudicator.sol
+**External:** State channel chain integration patterns, Ethereum JSON-RPC, op-stack compatible contracts
 
 ## Example
 

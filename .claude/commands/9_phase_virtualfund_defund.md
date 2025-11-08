@@ -4,7 +4,7 @@
 
 ## Summary
 
-Virtual channels - 3-party channels (Alice-Hub-Bob) requiring no on-chain txs beyond initial ledgers. Enables multi-hop payments, scalable channel networks. Critical innovation: Guarantees in ledger channels secure virtual channel, eliminating per-channel on-chain cost. Most complex protocol - coordinates 3 parties, manages guarantees across 2 ledgers. Preserves go-nitro VirtualFund + event sourcing.
+Virtual channels - 3-party channels (Alice-Hub-Bob) requiring no on-chain txs beyond initial ledgers. Enables multi-hop payments, scalable channel networks. Critical innovation: Guarantees in ledger channels secure virtual channel, eliminating per-channel on-chain cost. Most complex protocol - coordinates 3 parties, manages guarantees across 2 ledgers. Preserves proven VirtualFund pattern + event sourcing.
 
 ## Objectives
 
@@ -162,7 +162,7 @@ pub fn defundVirtualChannel(virtual_id: ChannelId, a: Allocator) !Objective;
 
 **Phases:** P3 (DirectFund), P5 (DirectDefund), P8 (Consensus)
 **ADRs:** 0015 (Multi-hop)
-**External:** go-nitro `/protocols/virtualfund/`, `/protocols/virtualdefund/`
+**External:** Virtual channel protocols, multi-hop state channel research
 
 ## Example
 

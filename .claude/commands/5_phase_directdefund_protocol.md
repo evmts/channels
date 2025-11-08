@@ -100,7 +100,7 @@ pub fn generateConclusionTx(
 
 |Risk|P|I|Mitigation|
 |--|--|--|--|
-|Conclusion tx encoding wrong|M|H|Cross-test go-nitro, validate ABI|
+|Conclusion tx encoding wrong|M|H|Cross-test reference implementations, validate ABI|
 |Withdrawal timing issues|L|M|Test finalization scenarios|
 |Force close complex|M|M|Defer P7 integration, test thoroughly|
 
@@ -121,7 +121,7 @@ pub fn generateConclusionTx(
 
 **Phases:** P2 (State), P3 (Objective)
 **ADRs:** 0006 (Objective)
-**External:** go-nitro `/protocols/directdefund/`, NitroAdjudicator.sol
+**External:** State channel defund protocols, op-stack compatible contracts (NitroAdjudicator pattern)
 
 ## Example
 

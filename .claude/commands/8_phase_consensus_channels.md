@@ -4,7 +4,7 @@
 
 ## Summary
 
-Consensus channels (ledger channels) - leader/follower updates, proposal queues, guarantee management for virtual channels. Critical for P9 (VirtualFund) - virtual channels require ledger guarantees. Preserves go-nitro leader/follower model + event sourcing. More complex than DirectFund due to asymmetric roles and concurrent proposals.
+Consensus channels (ledger channels) - leader/follower updates, proposal queues, guarantee management for virtual channels. Critical for P9 (VirtualFund) - virtual channels require ledger guarantees. Preserves proven leader/follower model + event sourcing. More complex than DirectFund due to asymmetric roles and concurrent proposals.
 
 ## Objectives
 
@@ -55,7 +55,7 @@ ReceiveProposal → Validate → Sign → Send → UpdateChannel
 - Q: When lock funds?
 - Opts: A) At prefund | B) At postfund | C) First propose
 - Rec: B (at postfund)
-- Why: Matches go-nitro, funded channel vs ⚠️ delayed (ok safe)
+- Why: Matches proven patterns, funded channel vs ⚠️ delayed (ok safe)
 
 ## Data Structures
 
@@ -167,8 +167,8 @@ pub fn receiveProposal(
 ## Refs
 
 **Phases:** P2 (State), P3 (Objectives), P5 (Defund), P7 (Chain)
-**ADRs:** 0013 (Proposal ordering), 0014 (Guarantee locking), go-nitro ADR-0003
-**External:** go-nitro `/channel/consensus_channel/`
+**ADRs:** 0013 (Proposal ordering), 0014 (Guarantee locking)
+**External:** State channel consensus patterns, ledger channel designs
 
 ## Example
 
