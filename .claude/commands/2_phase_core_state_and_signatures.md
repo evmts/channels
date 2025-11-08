@@ -248,9 +248,32 @@ pub fn emitStateReceived(store: *EventStore, state: State, sig: Signature, from:
 
 ## Refs
 
-**Phases:** P1 (Events)
-**ADRs:** 0004 (Sig), 0005 (ABI), 0006 (ChannelId)
-**External:** State channel implementations, Ethereum ABI spec, EIP-191, secp256k1 spec
+**Templates & Frameworks:**
+- [Phase Template](../../docs/phase-template.md) - Standard structure
+- [ADR Template](../../docs/adr-template.md) - Format for ADR-0004, 0005
+
+**Project Context:**
+- **PRD:** [docs/prd.md](../../docs/prd.md) §4.4 State Encoding, §7.3 State Structure, §8 Phase 2
+- **Context:** [docs/context.md](../../docs/context.md) - Nitro/Perun state channel patterns, secp256k1 security
+- **Learning Path:** [docs/LEARNING_PATHS.md](../../docs/LEARNING_PATHS.md) - Phase 2 specific reading
+
+**Architecture & Decisions:**
+- **Architecture Docs:** [docs/architecture/README.md](../../docs/architecture/README.md) - state-channels.md (to be created)
+- **ADRs to Create:** [docs/adrs/README.md](../../docs/adrs/README.md) - ADR-0004 (signature scheme), ADR-0005 (state encoding)
+
+**Testing & Implementation:**
+- **Fuzz Tests:** [docs/fuzz-tests.md](../../docs/fuzz-tests.md) - Property-based testing for signatures
+- **CLAUDE.md:** [CLAUDE.md](../../CLAUDE.md) - Zig conventions
+
+**Dependencies:**
+- **Prior phases:** [Phase 1](1_phase_1_event_sourcing.md) - Event types for state transitions
+- **Future phases:** P3+ (all protocols use state structures)
+
+**External References:**
+- Ethereum ABI Specification: https://docs.soliditylang.org/en/latest/abi-spec.html
+- EIP-191 (Signed Data Standard): https://eips.ethereum.org/EIPS/eip-191
+- secp256k1: Bitcoin/Ethereum elliptic curve signature scheme
+- go-nitro State types: https://github.com/statechannels/go-nitro
 
 ## Example
 

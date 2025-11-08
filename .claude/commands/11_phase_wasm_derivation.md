@@ -163,9 +163,34 @@ pub fn deriveState(messages: []Message, reducer_wasm: []const u8, a: Allocator) 
 
 ## Refs
 
-**Phases:** P1 (Events), P2 (State), P9 (Virtual)
-**ADRs:** 0016 (WASM runtime), 0017 (Determinism)
-**External:** Wasmer docs, PGlite docs, PRD §4.3 Deterministic Derivation
+**Templates & Frameworks:**
+- [Phase Template](../../docs/phase-template.md) - Standard structure
+- [ADR Template](../../docs/adr-template.md) - Format for ADR-0016, 0017
+
+**Project Context:**
+- **PRD:** [docs/prd.md](../../docs/prd.md) §4.3 WASM Apps, §6.3 Application Layer, §8 Phase 11
+- **Context:** [docs/context.md](../../docs/context.md) - Arbitrum Nitro (WASM), Optimism Cannon, Deterministic WASM (WAVM), PGlite, Guillotine EVM
+- **Learning Path:** [docs/LEARNING_PATHS.md](../../docs/LEARNING_PATHS.md) - Phase 11 reading sequence
+
+**Architecture & Decisions:**
+- **Architecture Docs:** [docs/architecture/README.md](../../docs/architecture/README.md) - wasm-derivation.md (to be created this phase)
+- **ADRs to Create:** [docs/adrs/README.md](../../docs/adrs/README.md) - ADR-0016 (WASM runtime choice), ADR-0017 (determinism enforcement)
+
+**Testing & Implementation:**
+- **Fuzz Tests:** [docs/fuzz-tests.md](../../docs/fuzz-tests.md) - Critical for determinism validation
+- **CLAUDE.md:** [CLAUDE.md](../../CLAUDE.md) - Zig conventions
+
+**Dependencies:**
+- **Prior phases:** [Phase 1](1_phase_1_event_sourcing.md) (event log), [Phase 2](2_phase_core_state_and_signatures.md) (state derivation), [Phase 9](9_phase_virtualfund_defund.md) (virtual channels to enhance)
+- **Future phases:** P12 (production hardening will stress-test WASM)
+
+**External References:**
+- **Wasmer:** https://wasmer.io/ - WASM runtime candidate
+- **PGlite:** https://github.com/electric-sql/pglite - PostgreSQL in WASM
+- **Guillotine:** https://github.com/sheredom/guillotine - EVM in Zig/WASM (110KB)
+- **Arbitrum WAVM:** https://github.com/OffchainLabs/nitro - Deterministic WASM subset
+- **WASM Determinism:** Avoiding non-determinism (floats, time, IO)
+- **Event Sourcing + WASM:** Pattern of `reducer(prevState, event) → newState`
 
 ## Example
 
