@@ -42,68 +42,69 @@ pub fn deriveEventId(
 pub fn canonicalizeJson(
     allocator: std.mem.Allocator,
     value: std.json.Value,
-) ![]u8 {
-    var buffer = std.ArrayList(u8).init(allocator);
-    errdefer buffer.deinit();
+) error{ OutOfMemory, NoSpaceLeft }![]u8 {
+    var buffer = std.ArrayList(u8){};
+    errdefer buffer.deinit(allocator);
 
-    try canonicalizeJsonInto(&buffer, value);
-    return buffer.toOwnedSlice();
+    try canonicalizeJsonInto(&buffer, allocator, value);
+    return buffer.toOwnedSlice(allocator);
 }
 
 fn canonicalizeJsonInto(
     buffer: *std.ArrayList(u8),
+    allocator: std.mem.Allocator,
     value: std.json.Value,
-) !void {
+) error{ OutOfMemory, NoSpaceLeft }!void {
     switch (value) {
-        .null => try buffer.appendSlice("null"),
-        .bool => |b| try buffer.appendSlice(if (b) "true" else "false"),
+        .null => try buffer.appendSlice(allocator, "null"),
+        .bool => |b| try buffer.appendSlice(allocator, if (b) "true" else "false"),
         .integer => |i| {
             var buf: [32]u8 = undefined;
             const str = try std.fmt.bufPrint(&buf, "{d}", .{i});
-            try buffer.appendSlice(str);
+            try buffer.appendSlice(allocator, str);
         },
         .float => |f| {
             // Represent floats as decimal strings with fixed precision
             var buf: [64]u8 = undefined;
             const str = try std.fmt.bufPrint(&buf, "{d:.6}", .{f});
-            try buffer.appendSlice(str);
+            try buffer.appendSlice(allocator, str);
         },
         .number_string => |s| {
             // Preserve number strings as-is
-            try buffer.appendSlice(s);
+            try buffer.appendSlice(allocator, s);
         },
         .string => |s| {
-            try buffer.append('"');
+            try buffer.append(allocator, '"');
             for (s) |c| {
                 switch (c) {
-                    '"' => try buffer.appendSlice("\\\""),
-                    '\\' => try buffer.appendSlice("\\\\"),
-                    '\n' => try buffer.appendSlice("\\n"),
-                    '\r' => try buffer.appendSlice("\\r"),
-                    '\t' => try buffer.appendSlice("\\t"),
-                    else => try buffer.append(c),
+                    '"' => try buffer.appendSlice(allocator, "\\\""),
+                    '\\' => try buffer.appendSlice(allocator, "\\\\"),
+                    '\n' => try buffer.appendSlice(allocator, "\\n"),
+                    '\r' => try buffer.appendSlice(allocator, "\\r"),
+                    '\t' => try buffer.appendSlice(allocator, "\\t"),
+                    else => try buffer.append(allocator, c),
                 }
             }
-            try buffer.append('"');
+            try buffer.append(allocator, '"');
         },
         .array => |arr| {
-            try buffer.append('[');
+            try buffer.append(allocator, '[');
             for (arr.items, 0..) |item, i| {
-                if (i > 0) try buffer.append(',');
-                try canonicalizeJsonInto(buffer, item);
+                if (i > 0) try buffer.append(allocator, ',');
+                try canonicalizeJsonInto(buffer, allocator, item);
             }
-            try buffer.append(']');
+            try buffer.append(allocator, ']');
         },
         .object => |obj| {
-            try buffer.append('{');
+            try buffer.append(allocator, '{');
 
             // Collect and sort keys
-            var keys = std.ArrayList([]const u8).init(buffer.allocator);
-            defer keys.deinit();
+            var keys = std.ArrayList([]const u8){};
+            defer keys.deinit(allocator);
 
             var iter = obj.iterator();
             while (iter.next()) |entry| {
-                try keys.append(entry.key_ptr.*);
+                try keys.append(allocator, entry.key_ptr.*);
             }
 
             // Sort keys lexicographically
@@ -115,18 +116,18 @@ fn canonicalizeJsonInto(
 
             // Serialize in sorted order
             for (keys.items, 0..) |key, i| {
-                if (i > 0) try buffer.append(',');
+                if (i > 0) try buffer.append(allocator, ',');
 
                 // Key
-                try buffer.append('"');
-                try buffer.appendSlice(key);
-                try buffer.appendSlice("\":");
+                try buffer.append(allocator, '"');
+                try buffer.appendSlice(allocator, key);
+                try buffer.appendSlice(allocator, "\":");
 
                 // Value
-                try canonicalizeJsonInto(buffer, obj.get(key).?);
+                try canonicalizeJsonInto(buffer, allocator, obj.get(key).?);
             }
 
-            try buffer.append('}');
+            try buffer.append(allocator, '}');
         },
     }
 }

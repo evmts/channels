@@ -17,10 +17,10 @@ pub const ObjectiveCreatedEvent = struct {
     };
 
     pub fn validate(self: *const @This(), ctx: *const ValidationCtx) !void {
+        _ = ctx;
         if (self.participants.len < 2) return error.InsufficientParticipants;
         if (self.participants.len > 255) return error.TooManyParticipants;
         // Precondition: objective_id must be unique (checked by caller against store)
-        _ = ctx;
     }
 };
 
@@ -114,7 +114,6 @@ pub const StateSignedEvent = struct {
         // Precondition: signer ∈ participants
         // Precondition: signature valid over state_hash
         // Postcondition: latest_signed_turn := turn_num
-        _ = ctx;
     }
 };
 
@@ -134,7 +133,6 @@ pub const StateReceivedEvent = struct {
         // Precondition: signature valid over state_hash
         // Precondition: signer ∈ participants
         // Postcondition: state stored, may trigger supported-updated event
-        _ = ctx;
     }
 };
 
@@ -154,7 +152,6 @@ pub const StateSupportedUpdatedEvent = struct {
         // Postcondition: channel.supported_turn := supported_turn
         if (self.supported_turn <= self.prev_supported_turn) return error.InvalidTurnProgression;
         if (self.num_signatures == 0) return error.NoSignatures;
-        _ = ctx;
     }
 };
 
@@ -169,7 +166,6 @@ pub const ChannelFinalizedEvent = struct {
         if (!ctx.channelExists(self.channel_id)) return error.ChannelNotFound;
         // Precondition: all participants signed state with isFinal=true
         // Postcondition: channel can be concluded off-chain
-        _ = ctx;
     }
 };
 
@@ -189,7 +185,6 @@ pub const DepositDetectedEvent = struct {
         if (!ctx.channelExists(self.channel_id)) return error.ChannelNotFound;
         // Precondition: chain event observed at block_num
         // Postcondition: channel holdings updated
-        _ = ctx;
     }
 };
 
@@ -205,7 +200,6 @@ pub const AllocationUpdatedEvent = struct {
 
     pub fn validate(self: *const @This(), ctx: *const ValidationCtx) !void {
         if (!ctx.channelExists(self.channel_id)) return error.ChannelNotFound;
-        _ = ctx;
     }
 };
 
@@ -227,7 +221,6 @@ pub const ChallengeRegisteredEvent = struct {
         // Precondition: chain event references valid channel_id
         // Precondition: turn_num_record >= supported_turn
         // Postcondition: challenge registered, timer started
-        _ = ctx;
     }
 };
 
@@ -244,7 +237,6 @@ pub const ChallengeClearedEvent = struct {
         if (!ctx.channelExists(self.channel_id)) return error.ChannelNotFound;
         // Precondition: new_turn_num_record > challenged turn
         // Postcondition: challenge cleared, timer reset
-        _ = ctx;
     }
 };
 
@@ -260,7 +252,6 @@ pub const ChannelConcludedEvent = struct {
     pub fn validate(self: *const @This(), ctx: *const ValidationCtx) !void {
         if (!ctx.channelExists(self.channel_id)) return error.ChannelNotFound;
         // Postcondition: channel concluded on-chain, can withdraw
-        _ = ctx;
     }
 };
 
@@ -279,7 +270,6 @@ pub const WithdrawCompletedEvent = struct {
         if (!ctx.channelExists(self.channel_id)) return error.ChannelNotFound;
         // Precondition: channel concluded on-chain
         // Postcondition: funds transferred to recipient
-        _ = ctx;
     }
 };
 
@@ -293,10 +283,9 @@ pub const MessageSentEvent = struct {
     payload_type: ?[]const u8,
     payload_size_bytes: u32,
 
-    pub fn validate(self: *const @This(), ctx: *const ValidationCtx) !void {
+    pub fn validate(_: *const @This(), _: *const ValidationCtx) !void {
         // Precondition: objective exists
         // Postcondition: message queued for delivery
-        _ = ctx;
     }
 };
 
@@ -309,9 +298,8 @@ pub const MessageReceivedEvent = struct {
     payload_type: ?[]const u8,
     payload_size_bytes: u32,
 
-    pub fn validate(self: *const @This(), ctx: *const ValidationCtx) !void {
+    pub fn validate(_: *const @This(), _: *const ValidationCtx) !void {
         // Postcondition: message decoded and validated
-        _ = ctx;
     }
 };
 
@@ -322,10 +310,9 @@ pub const MessageAckedEvent = struct {
     peer_id: []const u8,
     roundtrip_ms: u32,
 
-    pub fn validate(self: *const @This(), ctx: *const ValidationCtx) !void {
+    pub fn validate(_: *const @This(), _: *const ValidationCtx) !void {
         // Precondition: original message_sent event exists
         // Postcondition: delivery confirmed
-        _ = ctx;
     }
 };
 
@@ -346,9 +333,8 @@ pub const MessageDroppedEvent = struct {
         replay_attack,
     };
 
-    pub fn validate(self: *const @This(), ctx: *const ValidationCtx) !void {
+    pub fn validate(_: *const @This(), _: *const ValidationCtx) !void {
         // Postcondition: message rejected, reason logged
-        _ = ctx;
     }
 };
 
