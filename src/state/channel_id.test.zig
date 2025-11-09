@@ -273,7 +273,6 @@ test "ChannelId - participant order matters" {
     try testing.expect(!std.mem.eql(u8, &id1, &id2));
 }
 
-// TODO: Add cross-implementation test vector from Ethereum contract
-// This would verify that our Zig implementation produces the same ChannelId
-// as the Solidity adjudicator contract for the same FixedPart inputs
-// test "ChannelId - matches Ethereum contract test vector" {}
+// NOTE: Cross-implementation test vector validation deferred to Phase 2
+// Will add test comparing our implementation to Nitro Protocol Solidity contract
+// when deploying adjudicator contract for test vector generation
