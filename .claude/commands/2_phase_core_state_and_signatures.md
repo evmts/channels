@@ -1,10 +1,19 @@
 # P2: Core State & Signatures
 
 **Meta:** P2 | Deps: P1 | Owner: Core
+**Status:** Ready to Execute ✅
 
-## Quick Start (Execute Tomorrow)
+---
+
+## Quick Start (Execute Day 1)
 
 **Pre-flight:** Voltaire integrated ✅ | P1 events complete ✅ | Tests passing ✅
+
+**FIRST: Update Voltaire to latest:**
+```bash
+zig fetch --save=primitives https://github.com/evmts/primitives/archive/refs/heads/main.tar.gz
+zig build test  # Verify integration still works
+```
 
 **Day 1 Checklist:**
 1. Write ADR-0004 (Signature Scheme - secp256k1 recoverable + voltaire unaudited note)
@@ -15,6 +24,7 @@
 6. Create `src/state/channel_id.zig` - ChannelId generation using voltaire
 7. Create `src/state/channel_id.test.zig` - determinism, cross-impl vectors
 8. Update `src/root.zig` - export state module
+9. Remove any debug print statements before commit
 
 **Voltaire imports ready:**
 ```zig
@@ -38,7 +48,425 @@ src/
 └── abi/                  # (Day 2-3)
 ```
 
-**Expected outcome Day 1:** ADRs approved, core types defined, ChannelId working with tests passing.
+**Expected outcome Day 1:**
+- ✅ Voltaire updated to latest
+- ✅ ADRs approved (0004, 0005, 0006)
+- ✅ Core types defined with proper memory cleanup
+- ✅ ChannelId working with correct encoding order
+- ✅ Tests passing with no memory leaks
+- ✅ Debug output removed from production code
+
+---
+
+## Day-by-Day Execution Plan
+
+### Day 1: ADRs + Core Types + ChannelId
+
+**Morning: Write ADRs (2-3 hours)**
+
+**ADR-0004: Signature Scheme**
+- **File:** `docs/adrs/0004-signature-scheme.md`
+- **Template:** `docs/adr-template.md`
+- **Decision:** secp256k1 recoverable signatures via voltaire
+- **Rationale:**
+  - Ethereum compatibility (address recovery)
+  - Proven in Bitcoin/Ethereum ecosystems
+  - Hardware wallet support
+  - ⚠️ Voltaire implementation UNAUDITED (mark as testing-only)
+- **Alternatives considered:** ed25519 (faster but no recovery), BLS (complex)
+
+**ADR-0005: State Encoding**
+- **File:** `docs/adrs/0005-state-encoding.md`
+- **Decision:** Ethereum ABI packed encoding
+- **Rationale:**
+  - Smart contract compatibility (L1 adjudicator)
+  - Deterministic (same state → same bytes)
+  - Standard format (cross-implementation compatibility)
+- **Alternatives considered:** JSON (non-deterministic), RLP (Ethereum-specific), custom binary
+
+**ADR-0006: ChannelId Generation**
+- **File:** `docs/adrs/0006-channel-id-generation.md`
+- **Decision:** `keccak256(abi.encodePacked(participants, nonce, appDef, challengeDuration))`
+- **Rationale:**
+  - Deterministic (same FixedPart → same ID)
+  - Collision-resistant (256-bit hash)
+  - Standard pattern from go-nitro/nitro-protocol
+- **Alternatives considered:** Random UUID (non-deterministic), hash(participants+nonce) only (insufficient)
+
+**Afternoon: Core Types (3-4 hours)**
+
+**Create `src/state/types.zig`**
+
+Define all core types:
+
+```zig
+const std = @import("std");
+const Allocator = std.mem.Allocator;
+
+pub const Address = [20]u8;
+pub const Bytes32 = [32]u8;
+pub const ChannelId = Bytes32;
+
+pub const FixedPart = struct {
+    participants: []Address,
+    channel_nonce: u64,
+    app_definition: Address,
+    challenge_duration: u32,
+
+    pub fn clone(self: FixedPart, a: Allocator) !FixedPart {
+        const participants_copy = try a.alloc(Address, self.participants.len);
+        @memcpy(participants_copy, self.participants);
+        return FixedPart{
+            .participants = participants_copy,
+            .channel_nonce = self.channel_nonce,
+            .app_definition = self.app_definition,
+            .challenge_duration = self.challenge_duration,
+        };
+    }
+
+    pub fn deinit(self: FixedPart, a: Allocator) void {
+        a.free(self.participants);
+    }
+};
+
+pub const VariablePart = struct {
+    app_data: []const u8,
+    outcome: Outcome,
+    turn_num: u64,
+    is_final: bool,
+
+    pub fn clone(self: VariablePart, a: Allocator) !VariablePart {
+        const app_data_copy = try a.dupe(u8, self.app_data);
+        const outcome_copy = try self.outcome.clone(a);
+        return VariablePart{
+            .app_data = app_data_copy,
+            .outcome = outcome_copy,
+            .turn_num = self.turn_num,
+            .is_final = self.is_final,
+        };
+    }
+
+    pub fn deinit(self: VariablePart, a: Allocator) void {
+        a.free(self.app_data);
+        self.outcome.deinit(a);
+    }
+};
+
+pub const State = struct {
+    // Fixed
+    participants: []Address,
+    channel_nonce: u64,
+    app_definition: Address,
+    challenge_duration: u32,
+    // Variable
+    app_data: []const u8,
+    outcome: Outcome,
+    turn_num: u64,
+    is_final: bool,
+
+    pub fn fixedPart(self: State) FixedPart {
+        return FixedPart{
+            .participants = self.participants,
+            .channel_nonce = self.channel_nonce,
+            .app_definition = self.app_definition,
+            .challenge_duration = self.challenge_duration,
+        };
+    }
+
+    pub fn variablePart(self: State, a: Allocator) !VariablePart {
+        return VariablePart{
+            .app_data = try a.dupe(u8, self.app_data),
+            .outcome = try self.outcome.clone(a),
+            .turn_num = self.turn_num,
+            .is_final = self.is_final,
+        };
+    }
+
+    pub fn clone(self: State, a: Allocator) !State {
+        const participants_copy = try a.alloc(Address, self.participants.len);
+        @memcpy(participants_copy, self.participants);
+        const app_data_copy = try a.dupe(u8, self.app_data);
+        const outcome_copy = try self.outcome.clone(a);
+
+        return State{
+            .participants = participants_copy,
+            .channel_nonce = self.channel_nonce,
+            .app_definition = self.app_definition,
+            .challenge_duration = self.challenge_duration,
+            .app_data = app_data_copy,
+            .outcome = outcome_copy,
+            .turn_num = self.turn_num,
+            .is_final = self.is_final,
+        };
+    }
+
+    pub fn deinit(self: State, a: Allocator) void {
+        a.free(self.participants);
+        a.free(self.app_data);
+        self.outcome.deinit(a);
+    }
+};
+
+pub const Signature = struct {
+    r: [32]u8,
+    s: [32]u8,
+    v: u8,
+
+    pub fn toBytes(self: Signature) [65]u8 {
+        var result: [65]u8 = undefined;
+        @memcpy(result[0..32], &self.r);
+        @memcpy(result[32..64], &self.s);
+        result[64] = self.v;
+        return result;
+    }
+
+    pub fn fromBytes(bytes: [65]u8) Signature {
+        var r: [32]u8 = undefined;
+        var s: [32]u8 = undefined;
+        @memcpy(&r, bytes[0..32]);
+        @memcpy(&s, bytes[32..64]);
+        return Signature{
+            .r = r,
+            .s = s,
+            .v = bytes[64],
+        };
+    }
+};
+
+pub const Outcome = struct {
+    asset: Address,
+    allocations: []Allocation,
+
+    pub fn clone(self: Outcome, a: Allocator) !Outcome {
+        const allocations_copy = try a.alloc(Allocation, self.allocations.len);
+        for (self.allocations, 0..) |alloc, i| {
+            allocations_copy[i] = try alloc.clone(a);
+        }
+        return Outcome{
+            .asset = self.asset,
+            .allocations = allocations_copy,
+        };
+    }
+
+    pub fn deinit(self: Outcome, a: Allocator) void {
+        for (self.allocations) |alloc| {
+            alloc.deinit(a);
+        }
+        a.free(self.allocations);
+    }
+};
+
+pub const Allocation = struct {
+    destination: Bytes32,
+    amount: u256,
+    allocation_type: AllocationType,
+    metadata: []const u8,
+
+    pub const AllocationType = enum(u8) {
+        simple = 0,
+        guarantee = 1,
+    };
+
+    pub fn clone(self: Allocation, a: Allocator) !Allocation {
+        const metadata_copy = try a.dupe(u8, self.metadata);
+        return Allocation{
+            .destination = self.destination,
+            .amount = self.amount,
+            .allocation_type = self.allocation_type,
+            .metadata = metadata_copy,
+        };
+    }
+
+    pub fn deinit(self: Allocation, a: Allocator) void {
+        a.free(self.metadata);
+    }
+};
+```
+
+**Create `src/state/types.test.zig`**
+
+Test construction, clone, invariants (see full test examples in Testing section below).
+
+**⚠️ CRITICAL: Memory Ownership Pattern**
+
+When testing structs that own allocated memory, follow this pattern:
+
+```zig
+test "example - struct owns allocated memory" {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer _ = gpa.deinit();
+    const allocator = gpa.allocator();
+
+    // Allocate data
+    const data = try allocator.dupe(u8, "test_value");
+
+    // Create struct - transfers ownership to struct
+    const s = MyStruct{
+        .field = data,  // Struct now owns this memory
+    };
+
+    // CORRECT: Only defer struct.deinit()
+    defer s.deinit(allocator);  // This will free 'data' internally
+
+    // WRONG: defer allocator.free(data);  ← Double-free panic!
+    // Reason: s.deinit() already frees it
+}
+```
+
+**Structs with ownership in Phase 2:**
+- `VariablePart.deinit(a)` frees `app_data` and calls `outcome.deinit(a)`
+- `Allocation.deinit(a)` frees `metadata`
+- `State.deinit(a)` frees `participants`, `app_data`, and calls `outcome.deinit(a)`
+- `FixedPart.deinit(a)` frees `participants`
+- `Outcome.deinit(a)` frees all `allocations` and their metadata
+
+**Create `src/state/channel_id.zig`**
+
+ChannelId generation using voltaire:
+
+```zig
+const std = @import("std");
+const types = @import("types.zig");
+const primitives = @import("primitives");
+const crypto_pkg = @import("crypto");
+
+const ChannelId = types.ChannelId;
+const FixedPart = types.FixedPart;
+const Hash = crypto_pkg.Hash;
+const abi = primitives.AbiEncoding;
+
+/// Generate deterministic ChannelId from FixedPart using Ethereum-compatible formula:
+/// ChannelId = keccak256(abi.encodePacked(participants, nonce, appDef, challengeDuration))
+///
+/// This matches the Nitro Protocol and Ethereum L1 adjudicator contract.
+/// Same FixedPart will always produce same ChannelId (deterministic).
+/// 256-bit hash provides collision resistance.
+pub fn channelId(fixed: FixedPart, allocator: std.mem.Allocator) !ChannelId {
+    // Build array with all values: participants addresses + nonce + appDef + challengeDuration
+    const num_values = fixed.participants.len + 3; // participants + 3 fixed fields
+    var all_values = try allocator.alloc(abi.AbiValue, num_values);
+    defer allocator.free(all_values);
+
+    // Add each participant address individually
+    for (fixed.participants, 0..) |addr, i| {
+        const prim_addr = primitives.Address.Address{ .bytes = addr };
+        all_values[i] = abi.addressValue(prim_addr);
+    }
+
+    // Add fixed fields after participants
+    const app_addr = primitives.Address.Address{ .bytes = fixed.app_definition };
+    all_values[fixed.participants.len] = abi.AbiValue{ .uint64 = fixed.channel_nonce };
+    all_values[fixed.participants.len + 1] = abi.addressValue(app_addr);
+    all_values[fixed.participants.len + 2] = abi.AbiValue{ .uint32 = fixed.challenge_duration };
+
+    // Encode all values together
+    const encoded = try abi.encodePacked(allocator, all_values);
+    defer allocator.free(encoded);
+
+    // Keccak256 hash
+    return Hash.keccak256(encoded);
+}
+```
+
+**Create `src/state/channel_id.test.zig`**
+
+Test determinism and cross-impl vectors (see Testing section).
+
+**Update `src/root.zig`**
+
+Export state module:
+
+```zig
+pub const state = struct {
+    pub const types = @import("state/types.zig");
+    pub const channel_id = @import("state/channel_id.zig");
+};
+
+// Add to test block
+test {
+    _ = @import("state/types.test.zig");
+    _ = @import("state/channel_id.test.zig");
+}
+```
+
+**End of Day 1:**
+
+Run tests:
+```bash
+zig build test
+```
+
+Commit:
+```bash
+git add docs/adrs/000{4,5,6}-*.md src/state/
+git commit -m "📚 docs: Add P2 ADRs for signatures, encoding, ChannelId
+
+✨ feat: Implement core state types and ChannelId generation
+
+- Add ADR-0004 (Signature Scheme - secp256k1 via voltaire)
+- Add ADR-0005 (State Encoding - Ethereum ABI packed)
+- Add ADR-0006 (ChannelId Generation - keccak256 formula)
+- Implement State, FixedPart, VariablePart, Outcome, Allocation, Signature
+- Implement ChannelId generation using voltaire ABI + Keccak256
+- Tests: construction, clone, determinism, invariants
+- All tests passing"
+```
+
+---
+
+### Day 2: State Hashing + Signatures
+
+**Morning: State Hashing (3 hours)**
+
+**Create `src/state/hash.zig`**
+
+State hashing using voltaire ABI encoding + Keccak256.
+
+**Afternoon: Signatures (3 hours)**
+
+**Create `src/crypto/signature.zig`**
+
+Sign/verify using voltaire Crypto module.
+
+**Create `src/crypto/signature.test.zig`**
+
+Test signature roundtrip, recovery.
+
+---
+
+### Day 3: ABI Wrapper + Event Integration
+
+**Create `src/abi/encoder.zig`**
+
+Thin wrapper over voltaire AbiEncoding for state-specific encoding patterns.
+
+**Update event emission**
+
+Integrate State operations with P1 events (StateSigned, StateReceived).
+
+---
+
+### Day 4: Tests + Benchmarks + Demo
+
+**Integration tests:** Full lifecycle (Create → Sign → Verify → Emit)
+**Benchmarks:** Verify <1ms ChannelId, <2ms hash, <10ms sign+verify
+**Demo:** Alice/Bob channel example
+**Documentation:** Architecture docs, API reference
+
+---
+
+## Success Criteria (Day 4 Exit Gates)
+
+- ✅ Types defined: State, FixedPart, VariablePart, Outcome, Signature
+- ✅ ABI encoding byte-identical to Ethereum contracts
+- ✅ ChannelId 100% match to test vectors
+- ✅ Signature verify + pubkey recovery 100% correct
+- ✅ State hash deterministic
+- ✅ Events emit for all ops (100% cov)
+- ✅ Perf: <10ms P95 sign+verify
+- ✅ 60+ tests, 90%+ cov
+- ✅ 3 ADRs approved (0004, 0005, 0006)
+- ✅ Docs + demo
 
 ---
 
@@ -138,6 +566,18 @@ pub const FixedPart = struct {
     pub fn channelId(self: FixedPart, a: Allocator) !ChannelId;
     pub fn clone(self: FixedPart, a: Allocator) !FixedPart;
 };
+
+// ⚠️ CRITICAL: ChannelId Encoding Order
+// When generating ChannelId, encoding order MUST match Solidity:
+//   keccak256(abi.encodePacked(participants, channelNonce, appDefinition, challengeDuration))
+//
+// In practice:
+// 1. All participant addresses (20 bytes each, packed sequentially)
+// 2. channel_nonce (uint64, 8 bytes)
+// 3. app_definition (address, 20 bytes)
+// 4. challenge_duration (uint32, 4 bytes)
+//
+// Order change breaks L1 adjudicator compatibility!
 
 pub const VariablePart = struct {
     app_data: []const u8,
@@ -257,6 +697,64 @@ pub fn emitStateReceived(store: *EventStore, state: State, sig: Signature, from:
 - ABI encoding byte-match
 - Event emission complete
 
+**Zig Memory Management in Tests:**
+
+Critical pattern when testing structs with allocated fields:
+
+```zig
+test "struct with allocated memory" {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer _ = gpa.deinit();
+    const allocator = gpa.allocator();
+
+    // Allocate data
+    const data = try allocator.dupe(u8, "test_value");
+
+    // Create struct (transfers ownership)
+    const s = MyStruct{
+        .field = data,  // Struct now owns this memory
+    };
+
+    // CORRECT: Only defer struct.deinit()
+    defer s.deinit(allocator);  // This will free 'data'
+
+    // WRONG: defer allocator.free(data);  ← Double-free panic!
+}
+```
+
+**Common structs with ownership:**
+- `VariablePart.deinit()` frees `app_data` and calls `outcome.deinit()`
+- `Allocation.deinit()` frees `metadata`
+- `State.deinit()` frees `participants`, `app_data`, calls `outcome.deinit()`
+- `FixedPart.deinit()` frees `participants`
+- `Outcome.deinit()` frees all `allocations` and their metadata
+
+**Cross-Implementation Test Vector:**
+
+Add this test to verify Zig matches Solidity:
+```zig
+test "ChannelId - matches Solidity reference implementation" {
+    // Test vector from Ethereum contract
+    // Inputs:
+    //   participants: [0xAAAA...AAAA, 0xBBBB...BBBB] (20 bytes each)
+    //   nonce: 42
+    //   appDef: 0x0000...0000 (20 bytes)
+    //   challengeDuration: 86400
+    //
+    // Expected ChannelId: 0x... (compute in Solidity, add here)
+
+    const alice: types.Address = [_]u8{0xAA} ** 20;
+    const bob: types.Address = [_]u8{0xBB} ** 20;
+    // ... implementation
+
+    // TODO: Replace with actual hash from Solidity contract
+    const expected_id = [_]u8{0x00} ** 32; // PLACEHOLDER
+    try testing.expectEqualSlices(u8, &expected_id, &computed_id);
+}
+```
+
+Generate expected value by deploying test contract with same inputs.
+
 **Integration:**
 - Full lifecycle: Create → Sign → Verify → Emit → Reconstruct
 - Cross-impl: Our encoding matches reference implementations byte-for-byte
@@ -277,8 +775,9 @@ pub fn emitStateReceived(store: *EventStore, state: State, sig: Signature, from:
 
 **Voltaire integration:**
 ```bash
-# Fetch dependency
+# IMPORTANT: Fetch latest before starting (includes recent bug fixes)
 zig fetch --save=primitives https://github.com/evmts/primitives/archive/refs/heads/main.tar.gz
+zig build test  # Verify integration works
 ```
 
 **build.zig pattern:**

@@ -1,6 +1,45 @@
 # P1: Event Sourcing Foundation
 
 **Meta:** P1 | Deps: None | Owner: Core
+**Status:** Phase 1a COMPLETE ✅ | Phase 1b Ready to Execute
+
+---
+
+## Quick Start (Execute Phase 1b)
+
+**Pre-flight:** Phase 1a complete (20 events defined) ✅ | Event schemas ready ✅ | Tests passing ✅
+
+**Phase 1a Delivered (2025-11-08):**
+- ✅ 20 event types with schemas ([src/event_store/events.zig](../../src/event_store/events.zig))
+- ✅ Event ID derivation ([src/event_store/id.zig](../../src/event_store/id.zig))
+- ✅ 40 tests passing, golden vectors in [testdata/events/](../../testdata/events/)
+- ✅ Event catalog documentation ([docs/architecture/event-types.md](../../docs/architecture/event-types.md))
+
+**Phase 1b Scope (EventStore Implementation):**
+- EventStore with SegmentedList + RwLock + atomic operations
+- StateReconstructor (fold events → state)
+- SnapshotManager (cache optimization)
+- Concurrency tests using Thread.Pool
+- Performance benchmarks
+
+**Week-by-Week Plan:**
+
+**W1 (Docs):** ADRs 0001-0003, architecture docs, API specs
+**W2 (Core):** EventStore impl, atomic append, subscriptions
+**W3 (Reconstruct):** StateReconstructor, unit tests
+**W4 (Optimize):** Snapshots, integration tests, benchmarks
+**W5 (Validate):** Code review, perf validation, demo
+
+**Expected Outcome Phase 1b:**
+- [ ] EventStore thread-safe with SegmentedList
+- [ ] State reconstruction working (<100ms for 1000 events)
+- [ ] Snapshots every 1000 events
+- [ ] 50+ tests passing, 90%+ coverage
+- [ ] ADRs 0001-0003 approved
+- [ ] Integration test: append 1000 events → reconstruct
+- [ ] Demo: event log → state reconstruction
+
+---
 
 ## Zig 0.15 Constraints
 

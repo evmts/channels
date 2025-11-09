@@ -297,16 +297,45 @@ All phases follow the structure defined in [`docs/phase-template.md`](../../docs
 
 ---
 
+## Executing a Phase
+
+Each phase has a single comprehensive prompt file:
+
+**Phase 1:** [1_phase_1_event_sourcing.md](./1_phase_1_event_sourcing.md)
+- Contains Quick Start checklist + full spec + implementation report
+- Phase 1a complete (events defined), Phase 1b ready (EventStore)
+
+**Phase 2:** [2_phase_core_state_and_signatures.md](./2_phase_core_state_and_signatures.md)
+- Contains Day 1-4 execution plan + full spec + learnings
+- Ready to execute after Phase 1b complete
+
+**Phases 3-12:** [N_phase_*.md](./.) files
+- Each contains complete spec following [phase-template.md](../../docs/phase-template.md)
+
+## Prompt-Driven Development
+
+**Prompts = Code:** Version control these files, update based on learnings, regenerate code from improved specs.
+
+**Regeneration workflow:**
+1. Execute phase
+2. Discover issues/learnings
+3. Update phase prompt file
+4. Regenerate code/tests/docs
+5. Git rebase to apply retroactively
+
+**Example:** Phase 2 Day 1 execution revealed memory ownership patterns and encoding order requirements → both documented in [2_phase_core_state_and_signatures.md](./2_phase_core_state_and_signatures.md) for future regeneration.
+
+---
+
 ## Next Steps
 
-1. **Review phase plans** - Team review all 12 phases
-2. **Approve Phase 1** - Begin with event sourcing foundation
-3. **Set up infrastructure** - Repo, CI, tools
-4. **Execute Phase 1** - Week 1: Docs, Week 2: Tests, Weeks 3-5: Code
-5. **Iterate** - Complete phases sequentially per dependency graph
+1. **Execute Phase 1b** - EventStore implementation ([1_phase_1_event_sourcing.md](./1_phase_1_event_sourcing.md))
+2. **Execute Phase 2** - Core State & Signatures ([2_phase_core_state_and_signatures.md](./2_phase_core_state_and_signatures.md))
+3. **Iterate** - Complete phases sequentially per dependency graph
+4. **Update prompts** - Document learnings after each phase
 
 ---
 
 **Last Updated:** 2025-11-08
-**Plan Version:** 1.0
-**Status:** Complete - Ready for execution
+**Plan Version:** 1.1
+**Status:** Phase 1a complete, Phase 1b + Phase 2 ready for execution
