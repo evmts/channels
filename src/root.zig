@@ -28,6 +28,14 @@ pub const abi = struct {
     pub const encoder = @import("abi/encoder.zig");
 };
 
+// Objectives modules
+pub const objectives = struct {
+    pub const types = @import("objectives/types.zig");
+    pub const objective = @import("objectives/objective.zig");
+    pub const directfund = @import("objectives/directfund.zig");
+    pub const mocks = @import("objectives/mocks.zig");
+};
+
 pub fn bufferedPrint() !void {
     // Stdout is for the actual output of your application, for example if you
     // are implementing gzip, then only the compressed bytes should be sent to
@@ -56,5 +64,7 @@ test {
     _ = @import("state/channel_id.test.zig");
     _ = @import("state/hash.test.zig");
     _ = @import("crypto/signature.test.zig");
+    _ = @import("objectives/directfund.test.zig");
+    _ = @import("objectives/integration.test.zig");
     _ = @import("integration.test.zig");
 }
