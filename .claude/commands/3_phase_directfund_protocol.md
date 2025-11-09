@@ -57,39 +57,66 @@ CreateChannel → Objective{Prefund} → Crank() → {SendPrefund}
 ## Data Structures
 
 ```zig
-pub const Objective = struct {
-    id: ObjectiveId,
-    type: ObjectiveType,
-    status: Status,
-    data: ObjectiveData,
+pub const Objective = union(ObjectiveType) {
+    DirectFund: DirectFundObjective,
+    DirectDefund: void,
+    VirtualFund: void,
+    VirtualDefund: void,
 
-    pub fn crank(self: *Objective, input: Event) !CrankResult;
+    pub fn crank(self: *Objective, event: ObjectiveEvent, a: Allocator) !CrankResult;
 };
 
 pub const DirectFundObjective = struct {
-    channel: Channel,
-    prefund_state: ?SignedState,
-    postfund_state: ?SignedState,
-    deposits_detected: bool,
+    id: ObjectiveId,
+    channel_id: ChannelId,
+    status: ObjectiveStatus,
+    my_index: u8,  // Which participant are we (0-indexed)
+
+    // Channel parameters
+    fixed: FixedPart,
+    funding_outcome: Outcome,
+
+    // Protocol state tracking - one slot per participant
+    prefund_signatures: []?Signature,
+    postfund_signatures: []?Signature,
+    deposits_detected: []bool,
+
+    allocator: Allocator,
+
+    // Helper functions must be public for tests
+    pub fn allPrefundSigned(self: DirectFundObjective) bool;
+    pub fn allPostfundSigned(self: DirectFundObjective) bool;
+    pub fn allDepositsDetected(self: DirectFundObjective) bool;
+    pub fn isMyTurnToDeposit(self: DirectFundObjective) bool;
+    pub fn generatePrefundState(self: DirectFundObjective, a: Allocator) !State;
+    pub fn generatePostfundState(self: DirectFundObjective, a: Allocator) !State;
 };
 
 pub const CrankResult = struct {
-    updated: Objective,
     side_effects: []SideEffect,
     waiting_for: WaitingFor,
+
+    pub fn deinit(self: CrankResult, a: Allocator) void;
 };
 
 pub const WaitingFor = union(enum) {
     nothing,
-    complete_prefund,
-    my_turn_to_fund,
-    complete_funding,
-    complete_postfund,
+    approval,           // Waiting for policymaker approval
+    complete_prefund,   // Waiting for all prefund signatures
+    my_turn_to_fund,    // Waiting for our turn to deposit on-chain
+    complete_funding,   // Waiting for all deposits to appear on-chain
+    complete_postfund,  // Waiting for all postfund signatures
+
+    pub fn isBlocked(self: WaitingFor) bool;
 };
 
 pub const SideEffect = union(enum) {
     send_message: Message,
     submit_tx: Transaction,
+    emit_event: EmittedEvent,  // NOTE: Renamed to avoid collision with ObjectiveEvent
+
+    pub fn deinit(self: SideEffect, a: Allocator) void;
+    pub fn clone(self: SideEffect, a: Allocator) !SideEffect;
 };
 ```
 
@@ -97,19 +124,43 @@ pub const SideEffect = union(enum) {
 
 ```zig
 // Crank objective with event
-pub fn crank(obj: *Objective, event: Event, a: Allocator) !CrankResult {
-    return switch (obj.type) {
-        .DirectFund => try crankDirectFund(obj, event, a),
+pub fn crank(self: *Objective, event: ObjectiveEvent, a: Allocator) !CrankResult {
+    return switch (self.*) {
+        .DirectFund => |*obj| try obj.crank(event, a),
+        else => unreachable,
     };
 }
 
 // Create DirectFund objective
-pub fn createDirectFund(
-    participants: []Address,
-    nonce: u64,
-    outcome: Outcome,
-    a: Allocator
-) !Objective;
+pub fn init(
+    objective_id: ObjectiveId,
+    my_index: u8,
+    fixed: FixedPart,
+    funding_outcome: Outcome,
+    a: Allocator,
+) !DirectFundObjective {
+    const n = fixed.participants.len;
+    const prefund_sigs = try a.alloc(?Signature, n);
+    @memset(prefund_sigs, null);
+    const postfund_sigs = try a.alloc(?Signature, n);
+    @memset(postfund_sigs, null);
+    const deposits = try a.alloc(bool, n);
+    @memset(deposits, false);
+    const cid = try channel_id.channelId(fixed, a);
+
+    return DirectFundObjective{
+        .id = objective_id,
+        .channel_id = cid,
+        .status = .Unapproved,
+        .my_index = my_index,
+        .fixed = try fixed.clone(a),
+        .funding_outcome = try funding_outcome.clone(a),
+        .prefund_signatures = prefund_sigs,
+        .postfund_signatures = postfund_sigs,
+        .deposits_detected = deposits,
+        .allocator = a,
+    };
+}
 ```
 
 ## Implementation
