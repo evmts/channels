@@ -174,6 +174,66 @@ pub fn init(
 
 **Path:** T1→T2→T3→T4→T5→T6→T9
 
+### Critical Implementation Details
+
+**Zig 0.15 ArrayList Usage:**
+```zig
+// IMPORTANT: Use AlignedManaged in Zig 0.15+
+const array_list = std.array_list;
+var effects = array_list.AlignedManaged(SideEffect, null).init(a);
+```
+
+**Deposit Sequencing:**
+Deposits must occur in participant index order:
+```zig
+pub fn isMyTurnToDeposit(self: DirectFundObjective) bool {
+    // Deposit in order of participant index
+    for (self.deposits_detected, 0..) |deposited, i| {
+        if (i < self.my_index and !deposited) return false;  // Wait for earlier participants
+        if (i == self.my_index and !deposited) return true;  // Our turn!
+    }
+    return false; // Already deposited
+}
+```
+
+**Turn Number Formulas:**
+```zig
+// Prefund: turn 0, empty outcome
+const prefund_turn = 0;
+
+// Postfund: turn = (n * 2) - 1 where n = participants.len
+const postfund_turn = (fixed.participants.len * 2) - 1;  // e.g., 3 for 2-party
+```
+
+**Deposit Detection Logic:**
+```zig
+.deposit_detected => |dd| {
+    const depositor_idx = try self.findParticipantIndex(dd.depositor);
+    self.deposits_detected[depositor_idx] = true;
+
+    // Check if it's now our turn to deposit
+    if (!self.deposits_detected[self.my_index] and self.isMyTurnToDeposit()) {
+        const deposit_tx = try self.generateDepositTx(a);
+        try effects.append(.{ .submit_tx = deposit_tx });
+    }
+
+    // If all deposits detected, generate and send postfund
+    if (self.allDepositsDetected() and self.postfund_signatures[self.my_index] == null) {
+        // ... generate postfund, sign, send to peers
+    }
+},
+```
+
+**Memory Ownership:**
+- `otherParticipants()` allocates slice - ownership transfers to SideEffect
+- Do NOT defer free the peers slice after appending to effects
+- Tests must clone states for events and defer cleanup:
+```zig
+const state_clone = try state.clone(a);
+defer state_clone.deinit(a);
+const result = try obj.crank(.{ .state_received = .{ .state = state_clone, ... } }, a);
+```
+
 ## Testing
 
 **Unit:** 100+ tests, 90%+ cov
@@ -181,10 +241,46 @@ pub fn init(
 - Deposit triggers postfund
 - Postfund completes objective
 - WaitingFor accurate each state
+- Helper functions public for test access
 
 **Integration:**
 - 2-party fund channel end-to-end
 - Alice creates → exchange prefund → both deposit → exchange postfund → channel ready
+
+**Critical Test Pattern:**
+Each participant must receive their own deposit_detected event:
+```zig
+// Alice emits deposit tx
+const tx = result.side_effects[0].submit_tx;
+try chain.submitDeposit(tx, alice_obj.channel_id, alice_addr);
+
+// Alice must detect her own deposit
+{
+    const result = try alice_obj.crank(
+        .{ .deposit_detected = .{
+            .channel_id = alice_obj.channel_id,
+            .depositor = alice_addr,
+            .amount = 1000,
+        } },
+        a,
+    );
+    defer result.deinit(a);
+}
+
+// Then Bob detects Alice's deposit
+{
+    const result = try bob_obj.crank(
+        .{ .deposit_detected = .{
+            .channel_id = bob_obj.channel_id,
+            .depositor = alice_addr,
+            .amount = 1000,
+        } },
+        a,
+    );
+    defer result.deinit(a);
+    // Bob should now emit his deposit tx
+}
+```
 
 ## Dependencies
 
