@@ -5,6 +5,9 @@ const std = @import("std");
 pub const event_store = struct {
     pub const events = @import("event_store/events.zig");
     pub const id = @import("event_store/id.zig");
+    pub const store = @import("event_store/store.zig");
+    pub const reconstructor = @import("event_store/reconstructor.zig");
+    pub const snapshots = @import("event_store/snapshots.zig");
 };
 
 // State modules
@@ -39,6 +42,10 @@ test {
     @import("std").testing.refAllDecls(@This());
     _ = @import("event_store/events.test.zig");
     _ = @import("event_store/id.zig");
+    _ = @import("event_store/store.test.zig");
+    _ = @import("event_store/reconstructor.test.zig");
+    _ = @import("event_store/snapshots.test.zig");
+    _ = @import("event_store/integration.test.zig");
     _ = @import("state/types.test.zig");
     _ = @import("state/channel_id.test.zig");
 }
