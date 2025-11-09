@@ -240,7 +240,7 @@ test "Allocation - construction and clone" {
     const allocator = gpa.allocator();
 
     const metadata = try allocator.dupe(u8, "allocation_metadata");
-    defer allocator.free(metadata);
+    // Note: alloc.deinit will free metadata
 
     const alloc = types.Allocation{
         .destination = [_]u8{0xFF} ** 32,
