@@ -9,6 +9,17 @@
 
 **Pre-flight:** Voltaire integrated ✅ | P1 events complete ✅ | Tests passing ✅
 
+**⚠️ CRITICAL LEARNINGS FROM PHASE 1:**
+Phase 1 cleanup revealed critical issues that MUST be avoided in Phase 2:
+1. **Debug prints left in production code** → Add grep check before every commit
+2. **Incomplete golden test vectors** → Generate actual hashes, not placeholders
+3. **Missing event fields in tests** → Compile immediately after importing events
+4. **Zig 0.15 ArrayList API differences** → Always pass allocator explicitly
+5. **Memory ownership double-frees** → Only defer struct.deinit(), never both
+6. **ValidationCtx stub pattern** → Use global test store to prevent scope issues
+
+See detailed patterns in "Zig 0.15 Constraints & API Changes" section below.
+
 **FIRST: Update Voltaire to latest:**
 ```bash
 zig fetch --save=primitives https://github.com/evmts/primitives/archive/refs/heads/main.tar.gz
@@ -497,6 +508,36 @@ Integrate State operations with P1 events (StateSigned, StateReceived).
 - ✅ 60+ tests, 90%+ cov
 - ✅ 3 ADRs approved (0004, 0005, 0006)
 - ✅ Docs + demo
+
+### Pre-Commit Verification Checklist (MANDATORY)
+
+**Run ALL checks before final commit:**
+
+```bash
+# 1. No debug prints in production code
+grep -r "std.debug.print" src/state/ --exclude="*.test.zig"
+# Expected: No results
+
+grep -r "std.debug.print" src/crypto/ --exclude="*.test.zig"
+# Expected: No results
+
+grep -r "std.debug.print" src/abi/ --exclude="*.test.zig"
+# Expected: No results
+
+# 2. All tests pass
+zig build test
+# Expected: All tests passing
+
+# 3. Golden vectors have actual hashes
+grep -r "computed_by_test\|PLACEHOLDER\|TODO.*hash" testdata/
+# Expected: No results
+
+# 4. Event constructions have all required fields
+zig build test 2>&1 | grep "missing field"
+# Expected: No results (compilation succeeds)
+```
+
+**If ANY check fails, DO NOT commit. Fix issues first.**
 
 ---
 
@@ -1021,6 +1062,50 @@ Phase 1 delivered **20 events** including state-related events relevant to this 
 - Event types: [src/event_store/events.zig](../../src/event_store/events.zig)
 - Event schemas: [schemas/events/](../../schemas/events/)
 - Event catalog: [docs/architecture/event-types.md](../../docs/architecture/event-types.md)
+
+### Event Field Completeness (CRITICAL)
+
+**When Event Schemas Change:**
+
+If Phase 1 event schemas are updated, you MUST update ALL test usages:
+
+```bash
+# Find all test event constructions
+grep -rn "\.state_signed = \." src/ --include="*.test.zig"
+grep -rn "\.channel_created = \." src/ --include="*.test.zig"
+```
+
+**Common missing fields after schema updates:**
+- `StateSignedEvent`: `is_final`, `app_data_hash`
+- `ObjectiveCrankedEvent`: `waiting` (not just `side_effects_count`)
+- `ChannelCreatedEvent`: `app_definition`
+- `StateReceivedEvent`: `signer`, `signature`, `is_final`, `peer_id`
+
+**Pattern:** After importing event types, run `zig build test` immediately to catch missing fields.
+
+**Example from Phase 1 cleanup:**
+```zig
+// ❌ WRONG - missing required fields
+const event = Event{ .state_signed = .{
+    .channel_id = id,
+    .turn_num = 0,
+    .state_hash = hash,
+    // Missing: is_final, app_data_hash, signer, signature
+}};
+
+// ✅ CORRECT - all required fields
+const event = Event{ .state_signed = .{
+    .event_version = 1,
+    .timestamp_ms = @intCast(std.time.milliTimestamp()),
+    .channel_id = id,
+    .turn_num = 0,
+    .state_hash = hash,
+    .signer = alice,
+    .signature = sig,
+    .is_final = false,
+    .app_data_hash = null,
+}};
+```
 
 ### Integration Requirements for Phase 2
 

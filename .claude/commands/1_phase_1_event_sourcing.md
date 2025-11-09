@@ -528,20 +528,100 @@ pub const ChannelState = struct {
 };
 ```
 
-**ValidationCtx (Stub for Phase 1):**
+### ValidationCtx Implementation Pattern (Phase 1b)
+
+**CRITICAL:** Phase 1a used stub implementation. Phase 1b must implement actual validation.
+
+**ValidationCtx Integration:**
+
 ```zig
-// In events.zig - Phase 1 stub implementation
+// events.zig
+const EventStore = @import("store.zig").EventStore;
+
 pub const ValidationCtx = struct {
-    // Phase 1: Always return true (no store available yet)
-    // Phase 2+: Replace with actual EventStore queries
+    store: *EventStore,  // Mutable - readAt() needs lock
+
+    pub fn init(store: *EventStore) ValidationCtx {
+        return .{ .store = store };
+    }
+
+    pub fn objectiveExists(self: *const @This(), id: [32]u8) bool {
+        const len = self.store.*.len();
+        var i: u64 = 0;
+        while (i < len) : (i += 1) {
+            const event = self.store.*.readAt(i) catch continue;
+            switch (event.*) {
+                .objective_created => |created| {
+                    if (std.mem.eql(u8, &created.objective_id, &id)) return true;
+                },
+                else => {},
+            }
+        }
+        return false;
+    }
+
+    pub fn channelExists(self: *const @This(), id: [32]u8) bool {
+        const len = self.store.*.len();
+        var i: u64 = 0;
+        while (i < len) : (i += 1) {
+            const event = self.store.*.readAt(i) catch continue;
+            switch (event.*) {
+                .channel_created => |created| {
+                    if (std.mem.eql(u8, &created.channel_id, &id)) return true;
+                },
+                else => {},
+            }
+        }
+        return false;
+    }
+};
+```
+
+**Test stub pattern for events.test.zig:**
+```zig
+// events.test.zig
+const TestEventStore = struct {
+    count: u64 = 0,
+    pub fn len(self: *const @This()) u64 {
+        return self.count;
+    }
+    pub fn readAt(self: *@This(), _: u64) !*const Event {
+        _ = self;
+        return error.OutOfBounds;
+    }
+};
+
+// ✅ CORRECT - global scope prevents "out of scope" error
+var test_store_global = TestEventStore{};
+
+fn createTestCtx() ValidationCtx {
+    return ValidationCtx{ .store = @ptrCast(@alignCast(&test_store_global)) };
+}
+
+test "validation context stub" {
+    var ctx = createTestCtx();
+    // Use ctx in test...
+}
+```
+
+**Why global store needed:**
+- Local variables in helper functions go out of scope
+- ValidationCtx holds pointer to store
+- Pointer must remain valid for lifetime of ctx
+- Global variable has program lifetime
+
+**Phase 1a Stub (REPLACE in Phase 1b):**
+```zig
+// Phase 1a stub - REMOVE when EventStore implemented
+pub const ValidationCtx = struct {
     pub fn objectiveExists(self: *const @This(), id: [32]u8) bool {
         _ = self; _ = id;
-        return true;  // Stub - defer validation to Phase 2
+        return true;  // Stub - defer validation to Phase 1b
     }
 
     pub fn channelExists(self: *const @This(), id: [32]u8) bool {
         _ = self; _ = id;
-        return true;  // Stub - defer validation to Phase 2
+        return true;  // Stub - defer validation to Phase 1b
     }
 };
 ```

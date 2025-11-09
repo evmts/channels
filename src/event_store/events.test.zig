@@ -75,18 +75,57 @@ test "ObjectiveCreatedEvent - rejects too few participants" {
 }
 
 test "ObjectiveApprovedEvent - validates objective existence" {
+    const allocator = testing.allocator;
+    const result = try createTestCtx();
+    defer cleanupStore(result.store);
+
+    // First add objective to store
+    var participants = try allocator.alloc([20]u8, 2);
+    defer allocator.free(participants);
+    participants[0] = [_]u8{0x74} ++ [_]u8{0} ** 19;
+    participants[1] = [_]u8{0x86} ++ [_]u8{0} ** 19;
+
+    const objective_created = Event{
+        .objective_created = events.ObjectiveCreatedEvent{
+            .timestamp_ms = 1704067200000,
+            .objective_id = [_]u8{0xaa} ** 32,
+            .objective_type = .DirectFund,
+            .channel_id = [_]u8{0xbb} ** 32,
+            .participants = participants,
+        },
+    };
+    _ = try result.store.append(objective_created);
+
     const evt = events.ObjectiveApprovedEvent{
         .timestamp_ms = 1704067200000,
         .objective_id = [_]u8{0xaa} ** 32,
         .approver = [_]u8{0x74} ++ [_]u8{0} ** 19,
     };
 
-    const ctx = createTestCtx();
-    try evt.validate(&ctx);
+    try evt.validate(&result.ctx);
 }
 
 test "ObjectiveRejectedEvent - includes reason and error code" {
     const allocator = testing.allocator;
+    const result = try createTestCtx();
+    defer cleanupStore(result.store);
+
+    // First add objective to store
+    var participants = try allocator.alloc([20]u8, 2);
+    defer allocator.free(participants);
+    participants[0] = [_]u8{0x74} ++ [_]u8{0} ** 19;
+    participants[1] = [_]u8{0x86} ++ [_]u8{0} ** 19;
+
+    const objective_created = Event{
+        .objective_created = events.ObjectiveCreatedEvent{
+            .timestamp_ms = 1704067200000,
+            .objective_id = [_]u8{0xaa} ** 32,
+            .objective_type = .DirectFund,
+            .channel_id = [_]u8{0xbb} ** 32,
+            .participants = participants,
+        },
+    };
+    _ = try result.store.append(objective_created);
 
     const reason = try allocator.dupe(u8, "Insufficient collateral");
     defer allocator.free(reason);
@@ -101,11 +140,31 @@ test "ObjectiveRejectedEvent - includes reason and error code" {
         .error_code = error_code,
     };
 
-    const ctx = createTestCtx();
-    try evt.validate(&ctx);
+    try evt.validate(&result.ctx);
 }
 
 test "ObjectiveCrankedEvent - tracks side effects" {
+    const allocator = testing.allocator;
+    const result = try createTestCtx();
+    defer cleanupStore(result.store);
+
+    // First add objective to store
+    var participants = try allocator.alloc([20]u8, 2);
+    defer allocator.free(participants);
+    participants[0] = [_]u8{0x74} ++ [_]u8{0} ** 19;
+    participants[1] = [_]u8{0x86} ++ [_]u8{0} ** 19;
+
+    const objective_created = Event{
+        .objective_created = events.ObjectiveCreatedEvent{
+            .timestamp_ms = 1704067200000,
+            .objective_id = [_]u8{0xaa} ** 32,
+            .objective_type = .DirectFund,
+            .channel_id = [_]u8{0xbb} ** 32,
+            .participants = participants,
+        },
+    };
+    _ = try result.store.append(objective_created);
+
     const evt = events.ObjectiveCrankedEvent{
         .timestamp_ms = 1704067200000,
         .objective_id = [_]u8{0xaa} ** 32,
@@ -113,11 +172,31 @@ test "ObjectiveCrankedEvent - tracks side effects" {
         .waiting = false,
     };
 
-    const ctx = createTestCtx();
-    try evt.validate(&ctx);
+    try evt.validate(&result.ctx);
 }
 
 test "ObjectiveCompletedEvent - success flag" {
+    const allocator = testing.allocator;
+    const result = try createTestCtx();
+    defer cleanupStore(result.store);
+
+    // First add objective to store
+    var participants = try allocator.alloc([20]u8, 2);
+    defer allocator.free(participants);
+    participants[0] = [_]u8{0x74} ++ [_]u8{0} ** 19;
+    participants[1] = [_]u8{0x86} ++ [_]u8{0} ** 19;
+
+    const objective_created = Event{
+        .objective_created = events.ObjectiveCreatedEvent{
+            .timestamp_ms = 1704067200000,
+            .objective_id = [_]u8{0xaa} ** 32,
+            .objective_type = .DirectFund,
+            .channel_id = [_]u8{0xbb} ** 32,
+            .participants = participants,
+        },
+    };
+    _ = try result.store.append(objective_created);
+
     const evt = events.ObjectiveCompletedEvent{
         .timestamp_ms = 1704067200000,
         .objective_id = [_]u8{0xaa} ** 32,
@@ -125,8 +204,7 @@ test "ObjectiveCompletedEvent - success flag" {
         .final_channel_state = [_]u8{0xcc} ** 32,
     };
 
-    const ctx = createTestCtx();
-    try evt.validate(&ctx);
+    try evt.validate(&result.ctx);
 }
 
 // ===== Channel State Events Tests =====
