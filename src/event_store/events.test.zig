@@ -7,8 +7,26 @@ const Event = events.Event;
 const ValidationCtx = events.ValidationCtx;
 
 // Test helper to create validation context
-fn createTestCtx() ValidationCtx {
-    return ValidationCtx{};
+// Returns a fresh EventStore for each test call to avoid state pollution
+const StoreModule = @import("store.zig");
+const EventStore = StoreModule.EventStore;
+
+fn createTestCtx() !struct { ctx: ValidationCtx, store: *EventStore } {
+    const allocator = testing.allocator;
+    const store = try allocator.create(EventStore);
+    store.* = .{
+        .allocator = allocator,
+        .events = .{},
+        .subscribers = std.ArrayList(StoreModule.EventCallback){},
+        .rw_lock = .{},
+        .count = std.atomic.Value(u64).init(0),
+    };
+    return .{ .ctx = ValidationCtx.init(store), .store = store };
+}
+
+fn cleanupStore(store: *EventStore) void {
+    store.deinit();
+    testing.allocator.destroy(store);
 }
 
 // ===== Objective Events Tests =====
@@ -30,8 +48,9 @@ test "ObjectiveCreatedEvent - valid event passes validation" {
         .participants = participants,
     };
 
-    const ctx = createTestCtx();
-    try evt.validate(&ctx);
+    const result = try createTestCtx();
+    defer cleanupStore(result.store);
+    try evt.validate(&result.ctx);
 }
 
 test "ObjectiveCreatedEvent - rejects too few participants" {
@@ -50,8 +69,9 @@ test "ObjectiveCreatedEvent - rejects too few participants" {
         .participants = participants,
     };
 
-    const ctx = createTestCtx();
-    try testing.expectError(error.InsufficientParticipants, evt.validate(&ctx));
+    const result = try createTestCtx();
+    defer cleanupStore(result.store);
+    try testing.expectError(error.InsufficientParticipants, evt.validate(&result.ctx));
 }
 
 test "ObjectiveApprovedEvent - validates objective existence" {
