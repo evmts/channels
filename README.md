@@ -14,6 +14,51 @@ State channel infrastructure for high-throughput applications (games, collaborat
 
 **Target performance:** <100ms finality, zero marginal cost for off-chain updates, provable fairness via transparent state derivation.
 
+## Use Cases
+
+Event-sourced state channels excel for **bounded-duration, high-frequency interactions** between known parties.
+
+### Full Onchain Games (FOCG)
+
+- **Tactical RPGs/Strategy** - D&D-style combat, turn-based tactics, autobattlers (30-60 min matches, 100+ moves)
+- **Real-time competitive** - Fighting games, racing, card battlers (<100ms latency, provably fair RNG)
+- **Collaborative puzzle** - Escape rooms, co-op resource management (rich state, synchronous play)
+- **High-skill competitions** - Chess/Go tournaments, poker (reputation on chain, verifiable match history)
+
+### Frames (Farcaster Integration)
+
+- **Quick-play games** - RPS, tic-tac-toe, word battles (30 sec - 5 min, single signature UX)
+- **Social betting** - Prediction markets, "bet on this take" mini-markets (instant settlement, viral sharing)
+- **Collaborative creation** - Shared drawing, music jams (full edit history, provable co-ownership)
+
+### Token Mints (Novel Mechanisms)
+
+- **Play-to-mint** - Complete game → mint NFT with embedded score/stats (gameplay = provenance)
+- **Battle royale mints** - 100 players compete, placement determines trait rarity
+- **Trait evolution** - NFT holders "train" tokens via channels (Pokemon-style stat gains, anti-cheat via WASM)
+- **Collaborative worlds** - 1000 players build shared state, mint based on contribution metrics
+
+### Autonomous Worlds / MUD Integration
+
+- **Raid parties** - Persistent MUD world + ephemeral dungeon runs (30-60 min, loot written on close)
+- **PvP arenas** - Ranked ladder on-chain, matches in channels (100+ matches/hour vs 10-20 pure on-chain)
+- **Crafting sessions** - Complex crafting logic off-chain, verified items on-chain
+
+### Prediction Markets & Betting
+
+- **Live event betting** - Sports quarters, esports rounds (15-30 min windows, instant payout)
+- **Micro-markets** - Sub-minute granularity, frequent updates (hub as market maker)
+
+### Collaborative Work Sessions
+
+- **Pair programming** - Shared editor, attributed edits, contributor stats on-chain
+- **Design reviews** - Milestone-based payments triggered by channel events
+- **Writing rooms** - Co-authoring with provable contribution → royalty split
+
+**Why these work:** Known participants, bounded duration (mins-hours), high frequency (10-1000+ updates), instant finality, verifiable outcomes, privacy valuable.
+
+**Anti-patterns:** DeFi (need composability), permanent storage, transactions with strangers, async/slow updates.
+
 ## Core Innovation: Event Sourcing
 
 **Message logs as source of truth** (not snapshots).

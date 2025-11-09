@@ -10,18 +10,19 @@
 ## Table of Contents
 
 1. [Executive Summary](#1-executive-summary)
-2. [Problem Statement](#2-problem-statement)
-3. [Solution Overview](#3-solution-overview)
-4. [Core Concepts](#4-core-concepts)
-5. [System Architecture](#5-system-architecture)
-6. [Detailed Requirements](#6-detailed-requirements)
-7. [Protocol Specifications](#7-protocol-specifications)
-8. [Implementation Roadmap](#8-implementation-roadmap)
-9. [Technical Decisions & Rationale](#9-technical-decisions--rationale)
-10. [Security Considerations](#10-security-considerations)
-11. [Performance Targets](#11-performance-targets)
-12. [Open Questions](#12-open-questions)
-13. [References & Prior Art](#13-references--prior-art)
+2. [Use Cases](#2-use-cases)
+3. [Problem Statement](#3-problem-statement)
+4. [Solution Overview](#4-solution-overview)
+5. [Core Concepts](#5-core-concepts)
+6. [System Architecture](#6-system-architecture)
+7. [Detailed Requirements](#7-detailed-requirements)
+8. [Protocol Specifications](#8-protocol-specifications)
+9. [Implementation Roadmap](#9-implementation-roadmap)
+10. [Technical Decisions & Rationale](#10-technical-decisions--rationale)
+11. [Security Considerations](#11-security-considerations)
+12. [Performance Targets](#12-performance-targets)
+13. [Open Questions](#13-open-questions)
+14. [References & Prior Art](#14-references--prior-art)
 
 ---
 
@@ -76,7 +77,169 @@ Not for: DeFi, permanent storage, spontaneous transactions with strangers
 
 ---
 
-## 2. PROBLEM STATEMENT
+## 2. USE CASES
+
+**Core principle:** Event-sourced state channels excel for **bounded-duration, high-frequency interactions** between known parties.
+
+### 2.1 Full Onchain Games (FOCG)
+
+**The perfect fit.** Games naturally map to event sourcing - player actions are events, game state derives from action history.
+
+**Tactical RPGs / Strategy:**
+- D&D-style combat (30-60 min matches)
+- Turn-based tactics (XCOM-like, 1-2 hour sessions)
+- Autobattlers (unit placement + combat resolution)
+- **Why channels:** 100+ moves/game, instant feedback, zero gas per move
+- **Economics:** $1-50 wagers, winner-take-all or ranked rewards
+
+**Real-time competitive:**
+- Fighting games (Street Fighter-style, 3-10 min rounds)
+- Racing games (lap ghosts, time trials with stakes)
+- Card battlers (Hearthstone-style, 15-30 min matches)
+- **Why channels:** <100ms input latency required, rollback netcode compatible
+- **Novel aspect:** Provably fair RNG via commit-reveal schemes
+
+**Collaborative puzzle:**
+- Escape rooms (2-4 players, 20-40 min)
+- Co-op resource management (building/crafting sessions)
+- **Why channels:** Rich state (inventory, world objects), synchronous play
+- **Payout:** Split rewards based on contribution metrics
+
+**High-skill competitions:**
+- Chess/Go tournaments (1-3 hour matches, ELO-rated)
+- Poker tournaments (2-8 players, 1-4 hours)
+- **Why channels:** Reputation on chain, match history verifiable
+- **Hub value:** Tournament bracketing, prize pool escrow
+
+### 2.2 Frames (Farcaster Integration)
+
+**Instant-play experiences in social feeds.** State channels enable complex game mechanics in frame UIs without leaving the feed.
+
+**Quick-play games:**
+- Rock-paper-scissors (30 sec matches)
+- Tic-tac-toe / Connect-4 (2-5 min)
+- Word games (Wordle battles, 5 min)
+- **Flow:** Frame → open channel → play → close → display result (all <1 min)
+- **UX:** No wallet popups mid-game, single signature to start
+
+**Social betting:**
+- Prediction markets on frame polls
+- "Bet on this take" mini-markets (1 hour duration)
+- **Why channels:** Instant settlement, no waiting for block confirmations
+- **Viral loop:** Winners share results → new challenges → growth
+
+**Collaborative creation:**
+- Shared drawing canvas (5-15 min sessions)
+- Music jam sessions (beat creation, 10-30 min)
+- **State:** Full edit history in message log, final result published on-chain
+- **Rights:** Co-ownership provable via participation log
+
+### 2.3 Token Mints (Novel Mechanisms)
+
+**Generative/interactive mints** where the token metadata derives from on-chain gameplay.
+
+**Play-to-mint:**
+- Complete puzzle/game → mint NFT with score/stats embedded
+- Speedrun channels: Fastest time → rarest traits
+- **Uniqueness:** Message log hash becomes token ID, gameplay = provenance
+- **Example:** "This NFT represents a perfect game of Snake (score 9999, no deaths)"
+
+**Battle royale mints:**
+- 100 players, last standing mints legendary (others mint common/rare by placement)
+- Tournament brackets → trait rarity correlates with skill
+- **Channel structure:** Hub coordinates 50 two-party channels (bracket tree)
+- **Settlement:** Final state determines mint tier for all participants
+
+**Collaborative world-building:**
+- 1000 players contribute to shared world state over 24 hours
+- Final state snapshot mints as collection (each player gets portion based on contribution)
+- **State log:** Full construction history verifiable, every action attributed
+- **Economics:** Participation fee → prize pool split by contribution metrics
+
+**Trait evolution:**
+- NFT holders open channels to "train" their tokens (Pokemon-style)
+- Message log of training actions updates metadata
+- **Settlement:** New traits/stats written on-chain at channel close
+- **Anti-cheat:** Training logic in WASM reducer prevents impossible stat gains
+
+### 2.4 Autonomous Worlds / MUD Integration
+
+**Persistent game worlds with ephemeral gameplay sessions.**
+
+**Raid parties:**
+- MUD world has persistent state (dungeon layout, loot tables)
+- 4-player party opens channel for dungeon run (30-60 min)
+- **Channel state:** Party positions, health, inventory during raid
+- **Settlement:** Loot/XP written to MUD world at channel close
+- **Why hybrid:** Exploration is real-time off-chain, world persistence on-chain
+
+**PvP arenas:**
+- World has ranked ladder (on MUD)
+- Matches happen in channels (5-15 min)
+- **Result:** ELO updates, rewards distributed on-chain
+- **Advantage:** 100+ matches/hour possible (vs 10-20 on pure on-chain)
+
+**Crafting sessions:**
+- Base resources in MUD world
+- Crafting minigames in channels (combine items, timing challenges)
+- **Output:** New items materialized in world at close
+- **Efficiency:** Complex crafting logic off-chain, final items verified via WASM
+
+### 2.5 Prediction Markets & Betting
+
+**Short-duration markets on verifiable outcomes.**
+
+**Live event betting:**
+- Sports game quarters (15-30 min settlement windows)
+- Esports rounds (CS:GO rounds, 2-5 min)
+- **Channel:** Open at event start, close when outcome verifiable (oracle or consensus)
+- **Speed:** Instant payout vs waiting for on-chain finalization
+
+**Micro-markets:**
+- "Will this tweet get 1000 likes in 1 hour?"
+- "Will ETH hit $X in next 15 min?"
+- **Why channels:** Sub-minute granularity, frequent updates
+- **Hub role:** Market maker, liquidity provision
+
+### 2.6 Collaborative Work Sessions
+
+**Real-time co-creation with provable contributions.**
+
+**Pair programming:**
+- 2 devs, 2-hour session, shared code editor
+- **Message log:** Every edit, attributed to author
+- **Settlement:** Commit to GitHub, contributor stats on-chain
+- **Payment:** Split bounty by lines contributed (measured in channel)
+
+**Design reviews:**
+- Client + designer, 1-hour iteration session
+- **State:** Design versions, feedback, approval milestones
+- **Payment:** Triggered by milestone events in log
+
+**Writing rooms:**
+- Co-authors, 30-90 min sessions
+- **Output:** Draft with full edit history
+- **Rights:** Contribution % determines royalty split
+
+### 2.7 Why These Work
+
+**Common properties:**
+✅ **Known participants** - Not spontaneous (matchmaking/coordination pre-channel)
+✅ **Bounded duration** - Minutes to hours, not days/weeks
+✅ **High frequency** - 10-1000+ state updates
+✅ **Instant finality needed** - Can't wait for block times
+✅ **Verifiable outcomes** - Rules encoded in WASM, no trust required
+✅ **Privacy valuable** - State hidden during play, revealed at end
+
+**Anti-patterns (don't use channels for):**
+❌ **DeFi** - Composability required (use rollups)
+❌ **Permanent storage** - Data must live forever (use Arweave/IPFS)
+❌ **Strangers** - No prior relationship (use orderbook/AMM)
+❌ **Async/slow** - Updates days apart (use plain L2)
+
+---
+
+## 3. PROBLEM STATEMENT
 
 ### Current State: Why State Channels Didn't Scale
 
@@ -168,7 +331,7 @@ We'll know we've succeeded when:
 
 ---
 
-## 3. SOLUTION OVERVIEW
+## 4. SOLUTION OVERVIEW
 
 ### High-Level Architecture
 
@@ -313,7 +476,7 @@ SELECT player_id FROM players WHERE
 
 ---
 
-## 4. CORE CONCEPTS
+## 5. CORE CONCEPTS
 
 ### 4.1 Event-Sourced State Channels
 
@@ -789,7 +952,7 @@ Alice ←═══════════ Virtual Channel ═══════
 
 ---
 
-## 5. SYSTEM ARCHITECTURE
+## 6. SYSTEM ARCHITECTURE
 
 ### 5.1 Component Overview
 
@@ -1530,7 +1693,7 @@ Following state channel best practices, we adopt Architectural Decision Records:
 
 ---
 
-## 6. DETAILED REQUIREMENTS
+## 7. DETAILED REQUIREMENTS
 
 ### 6.1 Core State Channel Engine (Zig)
 
@@ -1888,7 +2051,7 @@ Following state channel best practices, we adopt Architectural Decision Records:
 
 ---
 
-## 7. PROTOCOL SPECIFICATIONS
+## 8. PROTOCOL SPECIFICATIONS
 
 ### 7.1 Channel Lifecycle
 
@@ -2360,7 +2523,7 @@ If counterparty finds invalid state:
 
 ---
 
-## 8. IMPLEMENTATION ROADMAP
+## 9. IMPLEMENTATION ROADMAP
 
 **Implementation Philosophy:** Documentation-Driven, Test-Driven Development
 
@@ -2714,7 +2877,7 @@ Events include `event_version` field (currently `1`) for schema evolution. Forwa
 
 ---
 
-## 9. TECHNICAL DECISIONS & RATIONALE
+## 10. TECHNICAL DECISIONS & RATIONALE
 
 ### Why Zig Over Go?
 
@@ -2864,7 +3027,7 @@ Events include `event_version` field (currently `1`) for schema evolution. Forwa
 
 ---
 
-## 10. SECURITY CONSIDERATIONS
+## 11. SECURITY CONSIDERATIONS
 
 ### Threat Model
 
@@ -2982,7 +3145,7 @@ Events include `event_version` field (currently `1`) for schema evolution. Forwa
 
 ---
 
-## 11. PERFORMANCE TARGETS
+## 12. PERFORMANCE TARGETS
 
 ### Latency
 
@@ -3036,7 +3199,7 @@ Events include `event_version` field (currently `1`) for schema evolution. Forwa
 
 ---
 
-## 12. OPEN QUESTIONS
+## 13. OPEN QUESTIONS
 
 1. **PGlite maturity:** If PGlite WASM has bugs, do we:
 
@@ -3096,7 +3259,7 @@ Events include `event_version` field (currently `1`) for schema evolution. Forwa
 
 ---
 
-## 13. REFERENCES & PRIOR ART
+## 14. REFERENCES & PRIOR ART
 
 ### State Channels
 
