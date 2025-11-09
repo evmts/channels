@@ -12,5 +12,5 @@
     "app_data_hash": "0x0000000000000000000000000000000000000000000000000000000000000000"
   },
   "canonical_json": "{\"app_data_hash\":\"0x0000000000000000000000000000000000000000000000000000000000000000\",\"channel_id\":\"0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef\",\"event_version\":1,\"is_final\":false,\"signature\":\"0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef12\",\"signer\":\"0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb0\",\"state_hash\":\"0xabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcd\",\"timestamp_ms\":1704067200000,\"turn_num\":5}",
-  "expected_id": "computed_by_test"
+  "expected_id": "0x6b2403ab47658335f59d87ec44ff11880d40ad35e935efad8ac561d10ed6c598"
 }

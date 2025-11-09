@@ -12,5 +12,5 @@
     ]
   },
   "canonical_json": "{\"channel_id\":\"0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"event_version\":1,\"objective_id\":\"0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"objective_type\":\"DirectFund\",\"participants\":[\"0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb0\",\"0x8626f6940E2eb28930eFb4CeF49B2d1F2C9C1199\"],\"timestamp_ms\":1704067200000}",
-  "expected_id": "computed_by_test"
+  "expected_id": "0x905b3ca1438feef0ac233ead120baeffd9a4fb2f33555bad08b95ce4d1d952f9"
 }
