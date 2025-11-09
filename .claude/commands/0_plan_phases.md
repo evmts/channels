@@ -80,6 +80,14 @@ Checklist: Template structure, DAG deps, testable, event-sourced, measurable suc
 6. **Risk Management:** Identify technical/schedule/dependency risks. Every risk has mitigation: backups, early validation, prototypes
 
 7. **Validation Gates:** G1: Design review (before code); G2: Code review (during); G3: Integration (before done); G4: Acceptance (stakeholder). Must pass to proceed.
+
+8. **Zig Version Awareness:** Project uses Zig 0.15.1. Training data may reference older APIs. When stdlib APIs unclear, check `/opt/homebrew/Cellar/zig/0.15.1/lib/zig/std/` for current implementation. Common 0.15 changes:
+   - ArrayList: `ArrayList(T){}` not `.init()`, methods need allocator param
+   - SegmentedList: `std.SegmentedList(T, N)` not `std.segmented_list.SegmentedList`
+   - RwLock: `std.Thread.RwLock` for concurrent reads
+   - All deinit methods now require allocator parameter
+
+9. **Phase Boundaries May Split:** Complex phases (especially foundational ones) may naturally divide into design vs implementation. Example: Phase 1 → P1a (event surface/schemas) + P1b (storage implementation). This is acceptable if each sub-phase delivers independent value and has distinct validation criteria.
 </principles>
 
 <required-phases>
@@ -128,9 +136,64 @@ Checklist: Template structure, DAG deps, testable, event-sourced, measurable suc
 **Principle:** Prompts are code - version/review/improve
 </regeneration>
 
+<testing-specification>
+## Test Strategy (NOT Coverage %)
+
+Zig has no built-in coverage tool. Instead of "90% coverage", specify **test categories**:
+
+**Required Categories:**
+1. **Unit:** Each public function (success + error paths, edge cases)
+2. **Invariant:** Domain rules enforced (turn progression, participant counts, signature validation)
+3. **Concurrency:** Thread.Pool tests for concurrent operations (readers/writers, race conditions)
+4. **Golden:** Stable test vectors for cryptographic operations (ID derivation, signatures, hashes)
+5. **Integration:** End-to-end flows (full protocol executions, multi-component interactions)
+6. **Property:** Roundtrip conversions (serialization, encoding/decoding)
+
+**Acceptance:** All categories represented, no critical paths untested, benchmarks meet targets.
+
+**Example Test Spec:**
+```zig
+// Unit: success path
+test "append returns sequential offsets" { ... }
+
+// Unit: error path
+test "append fails when event invalid" { ... }
+
+// Invariant: domain rule
+test "turn number must increase" { ... }
+
+// Concurrency: Thread.Pool
+test "concurrent appends atomic" {
+    var pool: std.Thread.Pool = undefined;
+    try pool.init(.{ .allocator = allocator });
+    // 10 threads × 100 appends = 1000 events
+}
+
+// Golden: stable vector
+test "event ID matches known hash" {
+    const event_json = @embedFile("../testdata/events/example.golden.json");
+    const expected_id = "0x1234...";
+    // Verify ID stability
+}
+
+// Integration: end-to-end
+test "full DirectFund protocol" {
+    // Create channel → deposit → postfund → finalize
+}
+
+// Property: roundtrip
+test "event serialization roundtrip" {
+    const e = Event{ ... };
+    const json = try e.toJson(allocator);
+    const decoded = try Event.fromJson(allocator, json);
+    try testing.expectEqual(e, decoded);
+}
+```
+</testing-specification>
+
 <validation>
-**Completeness:** ≥10 phases, template structure, all sections, ADRs ID'd, test strategy
-**Quality:** Measurable success, explicit deps, risks+mitigations, code examples, concrete deliverables
+**Completeness:** ≥10 phases, template structure, all sections, ADRs ID'd, test strategy (categories not %)
+**Quality:** Measurable success, explicit deps, risks+mitigations, code examples (Zig 0.15 syntax), concrete deliverables
 **Coherence:** DAG deps, logical build, gradual complexity, event-sourced throughout, proven patterns preserved
 **Feasibility:** 3-6wk phases, realistic breakdown, external deps ID'd, 12-18mo total, reasonable resources
 **Alignment:** Matches PRD vision, §6 requirements, §5.6 patterns, §8 roadmap, §9 decisions

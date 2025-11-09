@@ -41,18 +41,75 @@
 
 ---
 
-## Zig 0.15 Constraints
+## Zig 0.15 API Reference (CRITICAL)
 
-**NO async/await** - not until 0.16 (3-4mo). Sync code + explicit threading only.
+**Version:** Zig 0.15.1 (stdlib path: `/opt/homebrew/Cellar/zig/0.15.1/lib/zig/std/`)
 
-**Thread-safe stdlib:**
-- `std.Thread.RwLock` (prefer over Mutex) - multi-reader, single-writer
-- `std.Thread.Pool` - managed thread pool vs manual spawn
-- `std.atomic.Value(T)` - lock-free counters
-- `std.segmented_list.SegmentedList` - stable pointers (vs ArrayList realloc invalidation)
-- GPA needs `.thread_safe = true` config
+**Training data may reference Zig 0.14 APIs. When blocked, check stdlib source.**
 
-**ArrayList→SegmentedList:** ArrayList realloc invalidates ptrs, breaks subscriber refs to events. SegmentedList stable ptrs.
+### Key API Changes from 0.14 → 0.15
+
+**ArrayList:**
+```zig
+// ❌ OLD (0.14 - DO NOT USE)
+var list = std.ArrayList(T).init(allocator);
+list.append(item);  // allocator implicit
+list.deinit();
+
+// ✅ NEW (0.15 - USE THIS)
+var list = std.ArrayList(T){};  // No .init() call
+try list.append(allocator, item);  // allocator explicit
+list.deinit(allocator);  // allocator explicit
+```
+
+**SegmentedList (stable pointers for EventStore):**
+```zig
+// ✅ Correct import (0.15)
+const Event = @import("events.zig").Event;
+var events: std.SegmentedList(Event, 1024) = .{};  // NOT std.segmented_list.SegmentedList
+
+// Usage
+try events.append(allocator, event);
+const ptr = events.at(offset);  // Stable pointer, never invalidated
+events.deinit(allocator);
+```
+
+**Thread primitives:**
+```zig
+// RwLock for concurrent reads
+var rw_lock: std.Thread.RwLock = .{};
+rw_lock.lock();           // Exclusive write
+rw_lock.lockShared();     // Shared read
+rw_lock.unlock();
+rw_lock.unlockShared();
+
+// Atomic counters (lock-free)
+var count: std.atomic.Value(u64) = std.atomic.Value(u64).init(0);
+const offset = count.fetchAdd(1, .monotonic);
+const current = count.load(.monotonic);
+
+// Thread pool for tests
+var pool: std.Thread.Pool = undefined;
+try pool.init(.{ .allocator = allocator });
+defer pool.deinit();
+
+var wg: std.Thread.WaitGroup = .{};
+wg.start();  // Before spawning
+try pool.spawn(myFunction, .{ &wg, args... });
+wg.wait();   // Wait for all
+```
+
+**GeneralPurposeAllocator (thread-safe for concurrency tests):**
+```zig
+var gpa = std.heap.GeneralPurposeAllocator(.{ .thread_safe = true }){};
+defer {
+    const leaked = gpa.deinit();
+    if (leaked == .leak) std.debug.print("LEAK!\n", .{});
+}
+const allocator = gpa.allocator();
+```
+
+**NO async/await** - Zig 0.16+ only (3-4mo). Use sync code + explicit threading.
 
 ## Summary
 
@@ -68,20 +125,52 @@ Core innovation vs traditional snapshots: append-only event log = source-of-trut
 - OBJ-4: Snapshots (perf optimization, not source-of-truth)
 - OBJ-5: Tests 90%+, benchmarks <100ms/1K events
 
+## Multi-Agent Workflow (Use Task Tool)
+
+**When to use Task tool with subagents:**
+
+1. **Parallel ADR Writing:** Write ADRs 0001-0003 concurrently
+   ```
+   // Use 3 parallel Task calls in single message
+   Task(ADR-0001: Event Sourcing Strategy)
+   Task(ADR-0002: Event Serialization Format)
+   Task(ADR-0003: Storage Backend P1)
+   ```
+
+2. **Codebase Exploration:** Finding event schema references, checking stdlib APIs
+   ```
+   Task(subagent_type=Explore, "Find all event definitions", thoroughness=medium)
+   ```
+
+3. **Parallel Implementation:** EventStore + StateReconstructor + SnapshotManager can be implemented in parallel after ADRs approved
+
+**When NOT to use Task tool:**
+- Writing main implementation files (keep in context for debugging)
+- Test files that reference implementation (need to see both)
+- Integration between components (need full context)
+
+**Example parallel workflow:**
+```
+Week 1: Task(ADR-0001) + Task(ADR-0002) + Task(ADR-0003) in parallel
+Week 2: EventStore impl (main context) + Task(docs update) in parallel
+Week 3: Reconstructor impl (main context) + Task(benchmark setup)
+```
+
 ## Success Criteria
 
 **Done when:**
-- 15+ event types defined
-- EventStore: atomic append, thread-safe reads
+- **Phase 1a:** 20 events, schemas, ID derivation, tests ✅ COMPLETE
+- **Phase 1b:** EventStore + StateReconstructor + SnapshotManager implemented
+- EventStore: atomic append, thread-safe reads (RwLock), stable pointers (SegmentedList)
 - Reconstruct state from events deterministically
-- Snapshots every N events (N=1000)
-- 50+ tests, 90%+ cov
+- Snapshots every 1000 events
+- **Test categories:** Unit, Invariant, Concurrency, Golden, Integration, Property (see Testing section)
 - Benchmark: <100ms reconstruct 1K events, <50MB for 10K
-- 3 ADRs approved (sourcing strategy, serialization, storage)
+- 3 ADRs approved (0001-0003)
 - Docs: architecture + API
 - Demo: event log → state reconstruction
 
-**Exit gates:** All above + code review (2+) + integration test passes
+**Exit gates:** All above + code review (2+) + integration test passes + `zig build test` green
 
 ## Architecture
 
@@ -119,46 +208,119 @@ SnapshotManager: cache every N events
 - Rec: A (P1) → RocksDB (P4)
 - Why: Stable ptrs (subscriber safety), no realloc, simple vs ⚠️ ephemeral (ok testing)
 
-## Data Structures
+## Event ID Derivation (EXACT FORMULA)
 
+**Phase 1a deliverable** ([src/event_store/id.zig](../../src/event_store/id.zig))
+
+**Formula:**
+```
+canonical_bytes = utf8_encode(canonical_json(payload))
+bytestring = b"ev1|" ++ event_name_kebab ++ b"|" ++ canonical_bytes
+event_id = keccak256(bytestring)
+```
+
+**Example:**
 ```zig
-// Event union (all types)
-pub const Event = union(enum) {
-    objective_created: ObjectiveCreatedEvent,
-    objective_approved: ObjectiveApprovedEvent,
-    objective_rejected: ObjectiveRejectedEvent,
-    objective_completed: ObjectiveCompletedEvent,
-    state_signed: StateSignedEvent,
-    state_received: StateReceivedEvent,
-    deposit_detected: DepositDetectedEvent,
-    challenge_registered: ChallengeRegisteredEvent,
-    channel_concluded: ChannelConcludedEvent,
-    message_sent: MessageSentEvent,
-    message_received: MessageReceivedEvent,
-    snapshot_created: SnapshotCreatedEvent,
-
-    pub fn toJson(self: Event, a: Allocator) ![]u8;
-    pub fn fromJson(a: Allocator, json: []u8) !Event;
-    pub fn timestamp(self: Event) i64;
+// Input event
+const event = ObjectiveCreatedEvent{
+    .timestamp_ms = 1704067200000,
+    .objective_id = [_]u8{0xaa} ** 32,
+    // ... fields
 };
 
-// Example event
-pub const ObjectiveCreatedEvent = struct {
-    event_id: EventId,        // hash(content)
-    objective_id: ObjectiveId,
-    objective_type: ObjectiveType,
-    timestamp: i64,
+// Step 1: Serialize to JSON
+const json = try std.json.stringifyAlloc(allocator, event, .{});
+// Result: {"timestamp_ms":1704067200000,"objective_id":"aaaa...","..."}
+
+// Step 2: Canonicalize JSON
+const canonical = try canonicalizeJson(allocator, json);
+// Result: {"field1":"value1","field2":"value2"} (sorted keys, no whitespace)
+
+// Step 3: Build bytestring
+const bytestring = "ev1|objective-created|" ++ canonical;
+
+// Step 4: Hash
+const event_id = keccak256(bytestring);
+// Result: [32]u8 hash
+```
+
+**Canonical JSON Rules (RFC 8785-inspired):**
+1. **Sorted keys:** Lexicographic UTF-8 byte order
+2. **No whitespace:** Between tokens
+3. **Integers:** Decimal strings (no scientific notation)
+4. **Escaped chars:** `\"`, `\\`, `\n`, `\r`, `\t`
+5. **No trailing commas**
+6. **Arrays:** Preserve order (don't sort)
+
+**Implementation:** See [src/event_store/id.zig](../../src/event_store/id.zig) lines 50-150
+
+**Golden Test Vectors:** [testdata/events/*.golden.json](../../testdata/events/) (4 vectors for ID stability)
+
+---
+
+## Phase 1a Event Schema Reference
+
+**Delivered:** 20 events in [src/event_store/events.zig](../../src/event_store/events.zig)
+
+**Common Field Name Pitfalls** (use Phase 1a names in tests):
+
+| Test Code (WRONG) | Actual Field (Phase 1a) | Event |
+|-------------------|-------------------------|-------|
+| `.crank_count` | `.side_effects_count` + `.waiting` | ObjectiveCrankedEvent |
+| `.nonce` | `.channel_nonce` | ChannelCreatedEvent |
+| `.reason_message` | `.reason` | ObjectiveRejectedEvent |
+| `.final_state` | `.success` + `.final_channel_state` | ObjectiveCompletedEvent |
+| Missing fields | `.is_final`, `.app_data_hash` | StateSignedEvent |
+| Missing fields | `.app_definition` | ChannelCreatedEvent |
+
+**Key Event Structures (Phase 1a):**
+```zig
+pub const ObjectiveCrankedEvent = struct {
+    event_version: u8 = 1,
+    timestamp_ms: u64,
+    objective_id: [32]u8,
+    side_effects_count: u32,  // NOT crank_count
+    waiting: bool,
+};
+
+pub const ChannelCreatedEvent = struct {
+    event_version: u8 = 1,
+    timestamp_ms: u64,
+    channel_id: [32]u8,
+    participants: [][20]u8,
+    channel_nonce: u64,        // NOT nonce
+    app_definition: [20]u8,    // REQUIRED
+    challenge_duration: u32,
 };
 
 pub const StateSignedEvent = struct {
-    event_id: EventId,
-    channel_id: ChannelId,
-    state_hash: [32]u8,
+    event_version: u8 = 1,
+    timestamp_ms: u64,
+    channel_id: [32]u8,
     turn_num: u64,
-    signature: Signature,
-    timestamp: i64,
+    state_hash: [32]u8,
+    signer: [20]u8,
+    signature: [65]u8,
+    is_final: bool,            // REQUIRED
+    app_data_hash: ?[32]u8,    // REQUIRED (optional type)
 };
 
+pub const ObjectiveCompletedEvent = struct {
+    event_version: u8 = 1,
+    timestamp_ms: u64,
+    objective_id: [32]u8,
+    success: bool,              // NOT final_state
+    final_channel_state: ?[32]u8,
+};
+```
+
+**Complete event list:** See [docs/architecture/event-types.md](../../docs/architecture/event-types.md)
+
+---
+
+## Data Structures (Phase 1b to Implement)
+
+```zig
 // Types
 pub const EventId = [32]u8;
 pub const EventOffset = u64;
@@ -166,79 +328,221 @@ pub const EventOffset = u64;
 
 **Invariants:**
 - Events immutable once created
-- EventIDs unique (hash content)
+- EventIDs unique (hash content via formula above)
 - Log append-only (no delete/modify)
 - Timestamps monotonic within sequence
 - Deserialization deterministic
 
-## APIs
+## APIs (Phase 1b - Zig 0.15 Syntax)
 
 ```zig
+const std = @import("std");
+const Event = @import("events.zig").Event;  // Phase 1a
+const Allocator = std.mem.Allocator;
+
+pub const EventOffset = u64;
+pub const EventCallback = *const fn(Event, EventOffset) void;
+pub const SubscriptionId = usize;
+
 pub const EventStore = struct {
     allocator: Allocator,
-    events: std.segmented_list.SegmentedList(Event, 1024),  // stable ptrs
-    subscribers: ArrayList(EventCallback),
-    rw_lock: std.Thread.RwLock,  // multi-reader safe
-    count: std.atomic.Value(u64),  // lock-free len
+    events: std.SegmentedList(Event, 1024),  // ✅ NOT std.segmented_list.SegmentedList
+    subscribers: std.ArrayList(EventCallback),
+    rw_lock: std.Thread.RwLock,
+    count: std.atomic.Value(u64),
 
-    pub fn init(a: Allocator) !*EventStore;
+    const Self = @This();
 
-    // Append atomically, return offset
+    pub fn init(allocator: Allocator) !*Self {
+        const self = try allocator.create(Self);
+        errdefer allocator.destroy(self);
+
+        self.* = .{
+            .allocator = allocator,
+            .events = .{},  // ✅ No .init() call
+            .subscribers = std.ArrayList(EventCallback){},  // ✅ Struct literal
+            .rw_lock = .{},
+            .count = std.atomic.Value(u64).init(0),
+        };
+        return self;
+    }
+
+    // Append atomically, notify subscribers
     pub fn append(self: *Self, event: Event) !EventOffset {
         self.rw_lock.lock();
         defer self.rw_lock.unlock();
+
         const offset = self.count.fetchAdd(1, .monotonic);
-        try self.events.append(self.allocator, event);
-        for (self.subscribers.items) |cb| cb(self.events.at(offset).*, offset);
+        try self.events.append(self.allocator, event);  // ✅ allocator param
+
+        // Notify subscribers (stable pointer guaranteed by SegmentedList)
+        const event_ptr = self.events.at(offset);
+        for (self.subscribers.items) |callback| {
+            callback(event_ptr.*, offset);
+        }
+
         return offset;
     }
 
-    pub fn readFrom(self: *Self, offset: EventOffset) *const Event {
+    pub fn readAt(self: *Self, offset: EventOffset) !*const Event {
         self.rw_lock.lockShared();
         defer self.rw_lock.unlockShared();
+
+        if (offset >= self.count.load(.monotonic)) {
+            return error.OffsetOutOfBounds;
+        }
         return self.events.at(offset);
     }
-    pub fn readRange(self: *Self, start: EventOffset, end: EventOffset) Iterator;
-    pub fn subscribe(self: *Self, cb: EventCallback) !SubscriptionId;
-    pub fn len(self: *Self) EventOffset { return self.count.load(.monotonic); }
-    pub fn deinit(self: *Self) void;
-};
 
-pub const EventCallback = *const fn(Event, EventOffset) void;
+    pub fn subscribe(self: *Self, callback: EventCallback) !SubscriptionId {
+        self.rw_lock.lock();
+        defer self.rw_lock.unlock();
+
+        try self.subscribers.append(self.allocator, callback);  // ✅ allocator param
+        return self.subscribers.items.len - 1;
+    }
+
+    pub fn len(self: *Self) EventOffset {
+        return self.count.load(.monotonic);
+    }
+
+    pub fn deinit(self: *Self) void {
+        self.events.deinit(self.allocator);  // ✅ allocator param
+        self.subscribers.deinit(self.allocator);  // ✅ allocator param
+        self.allocator.destroy(self);
+    }
+};
 
 pub const StateReconstructor = struct {
     allocator: Allocator,
     event_store: *EventStore,
-    cache: StateCache,
 
-    pub fn init(a: Allocator, store: *EventStore) !*Self;
+    const Self = @This();
 
-    // Reconstruct objective from events
-    pub fn reconstructObjective(self: *Self, id: ObjectiveId) !ObjectiveState {
-        const events = try self.getObjectiveEvents(id);
+    pub fn init(allocator: Allocator, event_store: *EventStore) !*Self {
+        const self = try allocator.create(Self);
+        self.* = .{
+            .allocator = allocator,
+            .event_store = event_store,
+        };
+        return self;
+    }
+
+    // Reconstruct objective state from events
+    pub fn reconstructObjective(self: *Self, objective_id: [32]u8) !ObjectiveState {
+        const events = try self.getObjectiveEvents(objective_id);
         defer self.allocator.free(events);
-        var state = ObjectiveState.init(id);
-        for (events) |e| state = try state.apply(e);
+
+        if (events.len == 0) return error.ObjectiveNotFound;
+
+        // Initialize from first event
+        var state = switch (events[0]) {
+            .objective_created => |e| ObjectiveState.init(e.objective_id, e.timestamp_ms),
+            else => return error.InvalidFirstEvent,
+        };
+
+        // Fold remaining events
+        for (events) |event| {
+            state = try state.apply(event);
+        }
+
         return state;
     }
 
-    pub fn reconstructChannel(self: *Self, id: ChannelId) !ChannelState;
-    fn getObjectiveEvents(self: *Self, id: ObjectiveId) ![]Event;
+    pub fn reconstructChannel(self: *Self, channel_id: [32]u8) !ChannelState;
+    fn getObjectiveEvents(self: *Self, id: [32]u8) ![]Event;
+
+    pub fn deinit(self: *Self) void {
+        self.allocator.destroy(self);
+    }
 };
 
 pub const SnapshotManager = struct {
     allocator: Allocator,
     interval: usize,  // default 1000
-    snapshots: AutoHashMap(EventOffset, Snapshot),
+    snapshots: std.AutoHashMap(EventOffset, Snapshot),
 
-    pub fn createSnapshot(self: *Self, store: *EventStore, offset: EventOffset) !void;
+    const Self = @This();
+
+    pub fn initWithInterval(allocator: Allocator, interval: usize) !*Self {
+        const self = try allocator.create(Self);
+        self.* = .{
+            .allocator = allocator,
+            .interval = interval,
+            .snapshots = std.AutoHashMap(EventOffset, Snapshot).init(allocator),
+        };
+        return self;
+    }
+
+    pub fn createSnapshot(self: *Self, offset: EventOffset, data: []const u8) !void;
     pub fn getLatestSnapshot(self: *Self, before: EventOffset) ?Snapshot;
+    pub fn shouldSnapshot(self: *Self, offset: EventOffset) bool;
+
+    pub fn deinit(self: *Self) void {
+        var iter = self.snapshots.valueIterator();
+        while (iter.next()) |snapshot| {
+            self.allocator.free(snapshot.data);
+        }
+        self.snapshots.deinit();
+        self.allocator.destroy(self);
+    }
 };
 
 pub const Snapshot = struct {
     offset: EventOffset,
-    timestamp: i64,
-    data: []const u8,  // serialized state
+    timestamp_ms: u64,
+    data: []const u8,  // JSON serialized state (Phase 1)
+};
+
+// Simplified state types for Phase 1 reconstruction
+pub const ObjectiveState = struct {
+    objective_id: [32]u8,
+    status: ObjectiveStatus,
+    event_count: usize,
+    created_at: u64,
+    completed_at: ?u64,
+
+    pub const ObjectiveStatus = enum {
+        Created,
+        Approved,
+        Rejected,
+        Cranked,
+        Completed,
+    };
+
+    pub fn init(objective_id: [32]u8, timestamp: u64) ObjectiveState;
+    pub fn apply(self: ObjectiveState, event: Event) !ObjectiveState;
+};
+
+pub const ChannelState = struct {
+    channel_id: [32]u8,
+    status: ChannelStatus,
+    latest_turn_num: u64,
+    latest_supported_turn: u64,
+    event_count: usize,
+
+    pub const ChannelStatus = enum { Created, Open, Finalized };
+
+    pub fn init(channel_id: [32]u8, timestamp: u64) ChannelState;
+    pub fn apply(self: ChannelState, event: Event) !ChannelState;
+};
+```
+
+**ValidationCtx (Stub for Phase 1):**
+```zig
+// In events.zig - Phase 1 stub implementation
+pub const ValidationCtx = struct {
+    // Phase 1: Always return true (no store available yet)
+    // Phase 2+: Replace with actual EventStore queries
+    pub fn objectiveExists(self: *const @This(), id: [32]u8) bool {
+        _ = self; _ = id;
+        return true;  // Stub - defer validation to Phase 2
+    }
+
+    pub fn channelExists(self: *const @This(), id: [32]u8) bool {
+        _ = self; _ = id;
+        return true;  // Stub - defer validation to Phase 2
+    }
 };
 ```
 
@@ -271,49 +575,176 @@ pub const Snapshot = struct {
 **W4 (Optimize):** Snapshots, integration tests, benchmarks
 **W5 (Validate):** Code review, perf validation, demo
 
-## Testing
+## Testing (Test Categories, NOT Coverage %)
 
-**Unit (50+ tests, 90%+ cov):**
+**Zig has no coverage tool. Specify test categories instead of "90% coverage":**
+
+### Required Test Categories
+
+**1. Unit Tests (success + error paths):**
 ```zig
-test "event serialization roundtrip" {
-    const e = Event{ .objective_created = ... };
-    const json = try e.toJson(a);
-    defer a.free(json);
-    const decoded = try Event.fromJson(a, json);
-    try testing.expectEqual(e, decoded);
-}
-
-test "append atomic concurrent" {
+// Success path
+test "append returns sequential offsets" {
     var gpa = std.heap.GeneralPurposeAllocator(.{ .thread_safe = true }){};
     defer _ = gpa.deinit();
-    const a = gpa.allocator();
+    const allocator = gpa.allocator();
 
-    var store = try EventStore.init(a);
+    var store = try EventStore.init(allocator);
     defer store.deinit();
-    var pool: std.Thread.Pool = undefined;
-    try pool.init(.{ .allocator = a });
-    defer pool.deinit();
 
-    // 10 tasks × 100 appends = 1000 events
-    var wg: std.Thread.WaitGroup = .{};
-    for (0..10) |_| {
-        pool.spawn(appendMany, .{ &wg, store, 100 }) catch unreachable;
-        wg.start();
-    }
-    wg.wait();
-    try testing.expectEqual(@as(u64, 1000), store.len());
+    const offset1 = try store.append(makeTestEvent(1));
+    const offset2 = try store.append(makeTestEvent(2));
+
+    try testing.expectEqual(@as(u64, 0), offset1);
+    try testing.expectEqual(@as(u64, 1), offset2);
 }
 
-test "reconstruction correct" {
-    var store = try EventStore.init(a);
-    var reconstructor = try StateReconstructor.init(a, store);
-    const obj_id = ObjectiveId.generate();
-    _ = try store.append(Event{ .objective_created = ...obj_id... });
-    _ = try store.append(Event{ .objective_approved = ...obj_id... });
-    const state = try reconstructor.reconstructObjective(obj_id);
-    try testing.expectEqual(ObjectiveStatus.Approved, state.status);
+// Error path
+test "readAt fails when offset out of bounds" {
+    var store = try EventStore.init(allocator);
+    defer store.deinit();
+
+    try testing.expectError(error.OffsetOutOfBounds, store.readAt(999));
 }
 ```
+
+**2. Invariant Tests (domain rules enforced):**
+```zig
+test "turn number must not decrease" {
+    var store = try EventStore.init(allocator);
+    var reconstructor = try StateReconstructor.init(allocator, store);
+
+    const chan_id = makeChannelId(1);
+    _ = try store.append(Event{ .channel_created = ... });
+    _ = try store.append(Event{ .state_signed = .{ .turn_num = 5, ... } });
+    _ = try store.append(Event{ .state_signed = .{ .turn_num = 3, ... } });  // Lower!
+
+    const state = try reconstructor.reconstructChannel(chan_id);
+    // State should reflect highest turn (5), not latest event (3)
+    try testing.expectEqual(@as(u64, 5), state.latest_turn_num);
+}
+```
+
+**3. Concurrency Tests (Thread.Pool):**
+```zig
+test "concurrent appends are atomic" {
+    var gpa = std.heap.GeneralPurposeAllocator(.{ .thread_safe = true }){};
+    defer _ = gpa.deinit();
+    const allocator = gpa.allocator();
+
+    var store = try EventStore.init(allocator);
+    defer store.deinit();
+
+    var pool: std.Thread.Pool = undefined;
+    try pool.init(.{ .allocator = allocator });
+    defer pool.deinit();
+
+    const S = struct {
+        fn appendMany(s: *EventStore, count: usize, wg: *std.Thread.WaitGroup) void {
+            defer wg.finish();
+            var i: u32 = 0;
+            while (i < count) : (i += 1) {
+                _ = s.append(makeTestEvent(i)) catch unreachable;
+            }
+        }
+    };
+
+    var wg: std.Thread.WaitGroup = .{};
+    const num_threads = 10;
+    const appends_per_thread = 100;
+
+    var t: usize = 0;
+    while (t < num_threads) : (t += 1) {
+        wg.start();
+        try pool.spawn(S.appendMany, .{ store, appends_per_thread, &wg });
+    }
+
+    pool.waitAndWork(&wg);
+
+    // All 1000 appends should succeed atomically
+    try testing.expectEqual(@as(u64, 1000), store.len());
+}
+```
+
+**4. Golden Tests (stable vectors):**
+```zig
+test "event ID matches known hash (golden vector)" {
+    const event_json = @embedFile("../testdata/events/objective-created.golden.json");
+    const expected_id = "0x1234567890abcdef...";  // Known stable hash
+
+    const event = try Event.fromJson(allocator, event_json);
+    const actual_id = try deriveEventId(allocator, event);
+
+    try testing.expectEqualSlices(u8, &expected_id, &actual_id);
+}
+```
+
+**5. Integration Tests (end-to-end flows):**
+```zig
+test "full event sourcing flow: append → reconstruct" {
+    var store = try EventStore.init(allocator);
+    defer store.deinit();
+
+    var reconstructor = try StateReconstructor.init(allocator, store);
+    defer reconstructor.deinit();
+
+    const obj_id = makeObjectiveId(1);
+    const chan_id = makeChannelId(1);
+
+    // Lifecycle: created → approved → cranked → completed
+    _ = try store.append(Event{ .objective_created = .{
+        .timestamp_ms = timestamp(),
+        .objective_id = obj_id,
+        .objective_type = .DirectFund,
+        .channel_id = chan_id,
+        .participants = &[_][20]u8{},
+    }});
+    _ = try store.append(Event{ .objective_approved = .{
+        .timestamp_ms = timestamp(),
+        .objective_id = obj_id,
+        .approver = null,
+    }});
+    _ = try store.append(Event{ .objective_cranked = .{
+        .timestamp_ms = timestamp(),
+        .objective_id = obj_id,
+        .side_effects_count = 1,  // NOT crank_count!
+        .waiting = false,
+    }});
+    _ = try store.append(Event{ .objective_completed = .{
+        .timestamp_ms = timestamp(),
+        .objective_id = obj_id,
+        .success = true,  // NOT final_state!
+        .final_channel_state = null,
+    }});
+
+    const state = try reconstructor.reconstructObjective(obj_id);
+    try testing.expectEqual(ObjectiveState.ObjectiveStatus.Completed, state.status);
+    try testing.expectEqual(@as(usize, 4), state.event_count);
+}
+```
+
+**6. Property Tests (roundtrip conversions):**
+```zig
+test "event serialization roundtrip preserves data" {
+    const original = Event{ .objective_created = .{
+        .timestamp_ms = 1704067200000,
+        .objective_id = [_]u8{0xaa} ** 32,
+        .objective_type = .DirectFund,
+        .channel_id = [_]u8{0xbb} ** 32,
+        .participants = &[_][20]u8{},
+    }};
+
+    const json = try std.json.stringifyAlloc(allocator, original, .{});
+    defer allocator.free(json);
+
+    const decoded = try std.json.parseFromSlice(Event, allocator, json, .{});
+    defer decoded.deinit();
+
+    try testing.expectEqual(original, decoded.value);
+}
+```
+
+**Acceptance:** All 6 categories represented, 50+ total tests, critical paths covered.
 
 **Integration:**
 ```zig

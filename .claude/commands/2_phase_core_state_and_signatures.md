@@ -24,7 +24,16 @@ zig build test  # Verify integration still works
 6. Create `src/state/channel_id.zig` - ChannelId generation using voltaire
 7. Create `src/state/channel_id.test.zig` - determinism, cross-impl vectors
 8. Update `src/root.zig` - export state module
-9. Remove any debug print statements before commit
+9. **CRITICAL:** Remove any debug print statements before commit (grep check below)
+
+**Pre-commit verification:**
+```bash
+# Must return no results
+grep -r "std.debug.print" src/state/ --exclude="*.test.zig"
+
+# Run tests
+zig build test
+```
 
 **Voltaire imports ready:**
 ```zig
@@ -54,7 +63,8 @@ src/
 - ✅ Core types defined with proper memory cleanup
 - ✅ ChannelId working with correct encoding order
 - ✅ Tests passing with no memory leaks
-- ✅ Debug output removed from production code
+- ✅ **Debug output removed from production code** (grep verification passed)
+- ✅ **Golden test vectors have actual hashes** (not placeholders)
 
 ---
 
@@ -287,7 +297,7 @@ pub const Allocation = struct {
 
 Test construction, clone, invariants (see full test examples in Testing section below).
 
-**⚠️ CRITICAL: Memory Ownership Pattern**
+### ⚠️ CRITICAL: Memory Ownership Pattern
 
 When testing structs that own allocated memory, follow this pattern:
 
@@ -319,6 +329,26 @@ test "example - struct owns allocated memory" {
 - `State.deinit(a)` frees `participants`, `app_data`, and calls `outcome.deinit(a)`
 - `FixedPart.deinit(a)` frees `participants`
 - `Outcome.deinit(a)` frees all `allocations` and their metadata
+
+**Common double-free mistake:**
+```zig
+// ❌ WRONG - will panic with double-free
+test "bad example - double free" {
+    const data = try allocator.dupe(u8, "value");
+    defer allocator.free(data);  // ❌ First free
+
+    const s = MyStruct{ .field = data };
+    defer s.deinit(allocator);   // ❌ Second free - PANIC!
+}
+
+// ✅ CORRECT - only free via struct
+test "good example - single ownership" {
+    const data = try allocator.dupe(u8, "value");
+    const s = MyStruct{ .field = data };
+    defer s.deinit(allocator);  // ✅ Struct owns and frees
+    // NO defer allocator.free(data)
+}
+```
 
 **Create `src/state/channel_id.zig`**
 
@@ -470,7 +500,56 @@ Integrate State operations with P1 events (StateSigned, StateReceived).
 
 ---
 
-## Zig 0.15 Crypto/ABI
+## Zig 0.15 Constraints & API Changes
+
+### ⚠️ CRITICAL: No Debug Prints in Production Code
+
+**Rule:** NEVER use `std.debug.print` in production paths (`src/*/*.zig` except `*.test.zig`)
+
+**Bad:**
+```zig
+// src/state/channel_id.zig
+pub fn channelId(...) !ChannelId {
+    const encoded = try abi.encodePacked(...);
+    std.debug.print("Encoded: {any}\n", .{encoded});  // ❌ WRONG
+    return Hash.keccak256(encoded);
+}
+```
+
+**Good:**
+```zig
+// Only in test files if needed
+test "channelId encoding" {
+    if (builtin.mode == .Debug) {
+        std.debug.print("Debug info\n", .{});  // ✅ OK in tests
+    }
+}
+```
+
+**Enforcement:** Final checklist before marking phase complete:
+```bash
+grep -r "std.debug.print" src/ --exclude="*.test.zig"  # Must return empty
+```
+
+### ArrayList API (0.14 vs 0.15)
+
+Training data uses 0.14 syntax - **DO NOT use**:
+```zig
+var buffer = std.ArrayList(u8).init(allocator);  // ❌ Doesn't exist in 0.15
+defer buffer.deinit();
+return buffer.toOwnedSlice();
+```
+
+**Correct 0.15 syntax:**
+```zig
+var buffer = std.ArrayList(u8){};  // ✅ Correct
+defer buffer.deinit(allocator);     // Pass allocator to deinit
+return buffer.toOwnedSlice(allocator);  // Pass allocator
+```
+
+**All methods need allocator:** `append(alloc, ...)`, `appendSlice(alloc, ...)`, `deinit(alloc)`, `toOwnedSlice(alloc)`
+
+### std.crypto native APIs
 
 **std.crypto native:**
 - `std.crypto.ecc.Secp256k1` - curve ops, basePoint
@@ -728,6 +807,53 @@ test "struct with allocated memory" {
 - `State.deinit()` frees `participants`, `app_data`, calls `outcome.deinit()`
 - `FixedPart.deinit()` frees `participants`
 - `Outcome.deinit()` frees all `allocations` and their metadata
+
+### Golden Test Vector Completeness
+
+**CRITICAL:** Phase 1 had incomplete golden vectors (only 4/20 events had actual hashes).
+
+**Requirements for Phase 2 golden vectors:**
+- ✅ Schema files exist for all state operations
+- ✅ Canonical test inputs provided
+- ✅ **ACTUAL computed hashes stored** (not "computed_by_test" placeholder)
+- ✅ Test verifies hash stability across runs
+
+**How to generate actual hashes:**
+```zig
+// Temporary helper in types.test.zig (delete after golden vectors created)
+test "generate golden hash for ChannelId" {
+    const alice: types.Address = [_]u8{0xAA} ** 20;
+    const bob: types.Address = [_]u8{0xBB} ** 20;
+
+    const fixed = FixedPart{
+        .participants = &[_]Address{alice, bob},
+        .channel_nonce = 42,
+        .app_definition = [_]u8{0x00} ** 20,
+        .challenge_duration = 86400,
+    };
+
+    const id = try channelId(fixed, allocator);
+
+    // Print hex for copying to golden file
+    std.debug.print("ChannelId: 0x", .{});
+    for (id) |b| std.debug.print("{x:0>2}", .{b});
+    std.debug.print("\n", .{});
+}
+```
+
+**Golden vector pattern:**
+```json
+{
+  "description": "Standard 2-party channel",
+  "inputs": {
+    "participants": ["0xAAAA...", "0xBBBB..."],
+    "channel_nonce": 42,
+    "app_definition": "0x0000...",
+    "challenge_duration": 86400
+  },
+  "expected_channel_id": "0x1234abcd..."
+}
+```
 
 **Cross-Implementation Test Vector:**
 
