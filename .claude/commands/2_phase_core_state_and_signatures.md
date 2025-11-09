@@ -2,6 +2,46 @@
 
 **Meta:** P2 | Deps: P1 | Owner: Core
 
+## Quick Start (Execute Tomorrow)
+
+**Pre-flight:** Voltaire integrated ✅ | P1 events complete ✅ | Tests passing ✅
+
+**Day 1 Checklist:**
+1. Write ADR-0004 (Signature Scheme - secp256k1 recoverable + voltaire unaudited note)
+2. Write ADR-0005 (State Encoding - Ethereum ABI packed)
+3. Write ADR-0006 (ChannelId Generation - keccak256(abi.encodePacked(fixedPart)))
+4. Create `src/state/types.zig` - State, FixedPart, VariablePart, Outcome, Allocation, Signature
+5. Create `src/state/types.test.zig` - construction, clone, invariants
+6. Create `src/state/channel_id.zig` - ChannelId generation using voltaire
+7. Create `src/state/channel_id.test.zig` - determinism, cross-impl vectors
+8. Update `src/root.zig` - export state module
+
+**Voltaire imports ready:**
+```zig
+const primitives = @import("primitives");
+const crypto_pkg = @import("crypto");
+const Address = primitives.Address.Address;
+const Hash = crypto_pkg.Hash;
+const Crypto = crypto_pkg.Crypto;
+const abi = primitives.AbiEncoding;
+```
+
+**File structure to create:**
+```
+src/
+├── state/
+│   ├── types.zig          # State, FixedPart, VariablePart, Outcome
+│   ├── types.test.zig
+│   ├── channel_id.zig     # ChannelId generation
+│   └── channel_id.test.zig
+├── crypto/               # (Day 2)
+└── abi/                  # (Day 2-3)
+```
+
+**Expected outcome Day 1:** ADRs approved, core types defined, ChannelId working with tests passing.
+
+---
+
 ## Zig 0.15 Crypto/ABI
 
 **std.crypto native:**
@@ -182,24 +222,31 @@ pub fn emitStateReceived(store: *EventStore, state: State, sig: Signature, from:
 
 ## Implementation
 
+**STATUS:** Voltaire integrated ✅ | Ready for implementation
+
 **W1:** ADRs, core types (State/FixedPart/VariablePart), ChannelId generation
-**W2:** secp256k1 integration, ABI encoding
-**W3:** State hashing, sign/verify, unit tests
-**W4:** Cross-impl test vs reference implementations, event integration, benchmarks, demo
+**W2:** State hashing, sign/verify (using voltaire)
+**W3:** Unit tests, event integration
+**W4:** Cross-impl test vs reference implementations, benchmarks, demo
 
 **Tasks:**
-- T1: Define structs (S, P0)
-- T2: Define Outcome/Allocation/Signature (S, P0)
-- T3: ChannelId generation (M, P0)
-- T4: State hashing (L, P0)
-- T5: secp256k1 lib integration (M, P0)
-- T6: Sign creation (M, P0)
-- T7: Verify/recovery (M, P0)
-- T8: ABI encoding (L, P0)
-- T9: Event emission (M, P1)
-- T10-13: Tests, benchmarks, ADRs, docs
+- T1: Write ADR-0004, 0005, 0006 (S, P0)
+- T2: Define structs in src/state/types.zig (S, P0)
+- T3: Define Outcome/Allocation/Signature (S, P0)
+- T4: ChannelId generation using voltaire (M, P0)
+- T5: State hashing using voltaire ABI (L, P0)
+- T6: Sign creation using voltaire crypto (M, P0)
+- T7: Verify/recovery using voltaire crypto (M, P0)
+- T8: ABI encoding wrapper (thin wrapper over voltaire) (M, P0)
+- T9: Event emission integration (M, P1)
+- T10-13: Tests, benchmarks, docs
 
-**Path:** T1→T3→T4→T5→T6→T7→Cross-impl test
+**Path:** T1 (ADRs) → T2-T3 (Types) → T4 (ChannelId) → T5 (Hashing) → T6-T7 (Signatures) → T8-T9 (ABI/Events) → T10-13 (Tests/Docs)
+
+**Day 1 Target:** T1-T4 complete (ADRs, types, ChannelId with tests)
+**Day 2 Target:** T5-T7 complete (hashing, signatures with tests)
+**Day 3 Target:** T8-T9 complete (ABI wrapper, event emission)
+**Day 4 Target:** T10-13 complete (full test suite, benchmarks, demo)
 
 ## Testing
 
