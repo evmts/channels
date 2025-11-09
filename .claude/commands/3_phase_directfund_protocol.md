@@ -317,22 +317,43 @@ try chain.submitDeposit(tx, alice_obj.channel_id, alice_addr);
 ## Example
 
 ```zig
-const obj = try objectives.createDirectFund(
-    &[_]Address{alice, bob},
-    nonce,
-    outcome,
-    allocator
-);
+// Create DirectFund objective
+const fixed = FixedPart{
+    .participants = &[_]Address{alice, bob},
+    .channel_nonce = 42,
+    .app_definition = app_addr,
+    .challenge_duration = 86400,
+};
 
-// Crank with prefund received
-const result = try obj.crank(Event{ .state_received = prefund }, allocator);
+var alice_obj = try DirectFundObjective.init(
+    obj_id,
+    0,  // Alice is participant 0
+    fixed,
+    outcome,
+    allocator,
+);
+defer alice_obj.deinit(allocator);
+
+// Approve and crank
+const r1 = try alice_obj.crank(.approval_granted, allocator);
+defer r1.deinit(allocator);
 
 // Dispatch effects
-for (result.side_effects) |effect| {
+for (r1.side_effects) |effect| {
     switch (effect) {
-        .send_message => |msg| try p2p.send(msg),
+        .send_message => |msg| {
+            // NOTE: msg.to ownership belongs to effect, will be freed by r1.deinit()
+            try p2p.send(msg);
+        },
         .submit_tx => |tx| try chain.submit(tx),
+        .emit_event => |evt| try eventBus.emit(evt),
     }
+}
+
+// Check what we're waiting for
+const waiting = alice_obj.waitingFor();
+if (waiting == .complete_prefund) {
+    std.debug.print("Waiting for counterparty prefund signature\n", .{});
 }
 ```
 
