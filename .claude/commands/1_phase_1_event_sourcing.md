@@ -15,12 +15,21 @@
 - ✅ 40 tests passing, golden vectors in [testdata/events/](../../testdata/events/)
 - ✅ Event catalog documentation ([docs/architecture/event-types.md](../../docs/architecture/event-types.md))
 
-**Phase 1b Scope (EventStore Implementation):**
+**CRITICAL: Phase 1b Scope (EventStore Implementation Only):**
 - EventStore with SegmentedList + RwLock + atomic operations
 - StateReconstructor (fold events → state)
 - SnapshotManager (cache optimization)
+- State JSON serialization (ObjectiveState/ChannelState to/from JSON)
+- Event JSON serialization (all 20 event types)
 - Concurrency tests using Thread.Pool
 - Performance benchmarks
+
+**OUT OF SCOPE for Phase 1b (defer to Phase 2):**
+- ❌ DO NOT implement `src/state/channel_id.zig` (requires crypto primitives)
+- ❌ DO NOT implement `primitives` package (external dependency)
+- ❌ DO NOT implement `crypto` package (external dependency)
+- ✅ Keep state type definitions (FixedPart, VariablePart, State) in `src/state/types.zig`
+- ✅ Keep reconstructor state types (ObjectiveState, ChannelState) in `src/event_store/reconstructor.zig`
 
 **Week-by-Week Plan:**
 
@@ -32,12 +41,18 @@
 
 **Expected Outcome Phase 1b:**
 - [ ] EventStore thread-safe with SegmentedList
-- [ ] State reconstruction working (<100ms for 1000 events)
-- [ ] Snapshots every 1000 events
-- [ ] 50+ tests passing, 90%+ coverage
+- [ ] Atomic append + lock-free len() with RwLock + atomic counter
+- [ ] Subscriber pattern with stable pointers (SegmentedList guarantee)
+- [ ] State reconstruction working (<100ms for 10K events, target <1ms for 1K)
+- [ ] Snapshots every 1000 events with interval-based creation
+- [ ] State JSON serialization (ObjectiveState/ChannelState to/from JSON)
+- [ ] Event JSON serialization (all 20 event types to/from JSON)
+- [ ] 60+ tests passing (unit + integration + concurrency + performance)
+- [ ] Performance test: 10x speedup with snapshot-accelerated reconstruction
+- [ ] Memory test: no leaks for 10K events (GPA leak detection)
 - [ ] ADRs 0001-0003 approved
-- [ ] Integration test: append 1000 events → reconstruct
-- [ ] Demo: event log → state reconstruction
+- [ ] Integration test: append 10K events → reconstruct with snapshots
+- [ ] Demo: event log → snapshot → accelerated reconstruction
 
 ---
 
@@ -333,6 +348,81 @@ pub const EventOffset = u64;
 - Timestamps monotonic within sequence
 - Deserialization deterministic
 
+## Memory Ownership & Lifetime Rules
+
+**CRITICAL:** Event slices (participants, app_data, etc.) have unclear ownership in Phase 1.
+
+**Current Implementation Pattern (Phase 1):**
+- EventStore stores Event structs by value in SegmentedList (shallow copy)
+- Slices like `participants: [][20]u8` are NOT cloned by EventStore
+- **Caller must ensure slice memory remains valid for event lifetime**
+- This is acceptable for Phase 1 (in-memory only, test scenarios)
+
+**Example - Correct Lifetime Management:**
+```zig
+// ✅ CORRECT - participants lives as long as store
+test "event lifetime" {
+    var gpa = std.heap.GeneralPurposeAllocator(.{ .thread_safe = true }){};
+    defer _ = gpa.deinit();
+    const allocator = gpa.allocator();
+
+    var store = try EventStore.init(allocator);
+    defer store.deinit();
+
+    // Allocate participants - DON'T free until after store.deinit()
+    var participants = try allocator.alloc([20]u8, 2);
+    participants[0] = [_]u8{0x74} ++ [_]u8{0} ** 19;
+    participants[1] = [_]u8{0x86} ++ [_]u8{0} ** 19;
+
+    _ = try store.append(Event{
+        .channel_created = .{
+            .participants = participants,  // Pointer stored
+            // ... other fields
+        },
+    });
+
+    // Store can read this event safely because participants is still alive
+    const event = try store.readAt(0);
+    try testing.expect(event.channel_created.participants.len == 2);
+
+    // Free participants ONLY after store.deinit()
+    allocator.free(participants);  // Safe here
+}
+```
+
+**Example - WRONG (Dangling Pointer):**
+```zig
+// ❌ WRONG - participants freed before store uses it
+test "dangling pointer" {
+    var store = try EventStore.init(allocator);
+    defer store.deinit();
+
+    {
+        var participants = try allocator.alloc([20]u8, 2);
+        defer allocator.free(participants);  // ❌ Freed at end of block!
+
+        _ = try store.append(Event{
+            .channel_created = .{
+                .participants = participants,  // Dangling pointer after block!
+            },
+        });
+    }  // participants freed here
+
+    const event = try store.readAt(0);  // ❌ Use-after-free!
+}
+```
+
+**Phase 4 Solution:**
+- Implement `Event.clone(allocator)` for deep copies
+- EventStore.append() calls event.clone() before storing
+- EventStore owns all event data, caller can free immediately
+- Required for persistent storage (RocksDB migration)
+
+**For Now (Phase 1b):**
+- Document lifetime requirements in comments
+- Tests must manage slice lifetimes carefully
+- Acceptable tradeoff for in-memory testing
+
 ## APIs (Phase 1b - Zig 0.15 Syntax)
 
 ```zig
@@ -545,6 +635,9 @@ pub const ValidationCtx = struct {
         return .{ .store = store };
     }
 
+    /// Check if objective exists in event log
+    /// Performance: O(n) linear scan - acceptable for Phase 1 (<10K events)
+    /// Phase 4: Replace with HashMap index for O(1) lookup
     pub fn objectiveExists(self: *const @This(), id: [32]u8) bool {
         const len = self.store.*.len();
         var i: u64 = 0;
@@ -560,6 +653,9 @@ pub const ValidationCtx = struct {
         return false;
     }
 
+    /// Check if channel exists in event log
+    /// Performance: O(n) linear scan - acceptable for Phase 1 (<10K events)
+    /// Phase 4: Replace with HashMap index for O(1) lookup
     pub fn channelExists(self: *const @This(), id: [32]u8) bool {
         const len = self.store.*.len();
         var i: u64 = 0;
@@ -577,71 +673,84 @@ pub const ValidationCtx = struct {
 };
 ```
 
-**Test stub pattern for events.test.zig:**
+**ValidationCtx Test Pattern (COPY THIS EXACTLY):**
+
 ```zig
-// events.test.zig
-const TestEventStore = struct {
-    count: u64 = 0,
-    pub fn len(self: *const @This()) u64 {
-        return self.count;
-    }
-    pub fn readAt(self: *@This(), _: u64) !*const Event {
-        _ = self;
-        return error.OutOfBounds;
-    }
-};
+// events.test.zig - How to test with ValidationCtx
+const StoreModule = @import("store.zig");
+const EventStore = StoreModule.EventStore;
 
-// ✅ CORRECT - global scope prevents "out of scope" error
-var test_store_global = TestEventStore{};
-
-fn createTestCtx() ValidationCtx {
-    return ValidationCtx{ .store = @ptrCast(@alignCast(&test_store_global)) };
+// Helper to create validation context with proper cleanup
+fn createTestCtx() !struct { ctx: ValidationCtx, store: *EventStore } {
+    const allocator = testing.allocator;
+    const store = try EventStore.init(allocator);
+    return .{ .ctx = ValidationCtx.init(store), .store = store };
 }
 
-test "validation context stub" {
-    var ctx = createTestCtx();
-    // Use ctx in test...
+fn cleanupStore(store: *EventStore) void {
+    store.deinit();  // EventStore.deinit handles self-destruction
+}
+
+// Example test using ValidationCtx
+test "ObjectiveApprovedEvent - validates objective existence" {
+    const allocator = testing.allocator;
+    const result = try createTestCtx();
+    defer cleanupStore(result.store);
+
+    // Add objective to store first
+    var participants = try allocator.alloc([20]u8, 2);
+    defer allocator.free(participants);
+    participants[0] = [_]u8{0x74} ++ [_]u8{0} ** 19;
+    participants[1] = [_]u8{0x86} ++ [_]u8{0} ** 19;
+
+    const obj_id = [_]u8{0xaa} ** 32;
+    const created_event = Event{
+        .objective_created = .{
+            .timestamp_ms = 1704067200000,
+            .objective_id = obj_id,
+            .objective_type = .DirectFund,
+            .channel_id = [_]u8{0xbb} ** 32,
+            .participants = participants,
+        },
+    };
+    _ = try result.store.append(created_event);
+
+    // Now test validation
+    const approved_event = events.ObjectiveApprovedEvent{
+        .timestamp_ms = 1704067200001,
+        .objective_id = obj_id,
+        .approver = null,
+    };
+
+    try approved_event.validate(&result.ctx);  // Should pass
 }
 ```
 
-**Why global store needed:**
-- Local variables in helper functions go out of scope
-- ValidationCtx holds pointer to store
-- Pointer must remain valid for lifetime of ctx
-- Global variable has program lifetime
-
-**Phase 1a Stub (REPLACE in Phase 1b):**
-```zig
-// Phase 1a stub - REMOVE when EventStore implemented
-pub const ValidationCtx = struct {
-    pub fn objectiveExists(self: *const @This(), id: [32]u8) bool {
-        _ = self; _ = id;
-        return true;  // Stub - defer validation to Phase 1b
-    }
-
-    pub fn channelExists(self: *const @This(), id: [32]u8) bool {
-        _ = self; _ = id;
-        return true;  // Stub - defer validation to Phase 1b
-    }
-};
-```
+**Why This Pattern:**
+- Creates real EventStore (not stub) for integration testing
+- Proper cleanup with defer
+- Tests actual ValidationCtx logic against real store
+- No global state, no lifetime issues
 
 ## Implementation
 
-**Tasks:**
-- T1: Event types (S, 2-4h)
+**Tasks (Phase 1b):**
+- T1: ✅ Event types (COMPLETE - Phase 1a delivered 20 events)
 - T2: EventStore impl (M, 1-2d) - SegmentedList, RwLock, atomic count
-- T3: Atomic append (M, 1-2d) - thread-safe, stable ptrs
-- T4: Subscriptions (M, 1-2d) - callbacks
-- T5: StateReconstructor (L, 3-5d) - fold logic
-- T6: SnapshotManager (L, 3-5d) - create/restore
-- T7: EventStore tests (L, 3-5d) - use Thread.Pool for concurrency tests
-- T8: Reconstructor tests (L, 3-5d)
-- T9: Integration test (M, 1-2d) - append→reconstruct
-- T10: Benchmarks (M, 1-2d)
-- T11: ADRs 0001-0003 (M, 1-2d)
-- T12: Architecture docs (M, 1-2d)
-- T13: API docs (M, 1-2d)
+- T3: Atomic append (M, 1-2d) - thread-safe, stable ptrs, subscriber notifications
+- T4: Subscriptions (M, 1-2d) - callbacks with stable pointers
+- T5: StateReconstructor (L, 3-5d) - fold logic with single-pass filtering
+- T6a: Snapshot Infrastructure (M, 2d) - SnapshotManager, interval-based creation
+- T6b: State Serialization (M, 1d) - ObjectiveState/ChannelState to/from JSON
+- T6c: Snapshot-Accelerated Reconstruction (M, 1d) - Use snapshots in reconstructor
+- T7a: Event JSON Serialization (M, 1d) - Event.toJson() / fromJson() for all 20 types
+- T7b: EventStore tests (L, 3-5d) - Unit + concurrency (Thread.Pool) + performance
+- T8: Reconstructor tests (L, 3-5d) - Unit + integration + snapshot acceleration
+- T9: Integration test (M, 1-2d) - Full lifecycle: 10K events → snapshots → reconstruct
+- T10: Benchmarks (M, 1-2d) - <1ms for 1K events, <100ms for 10K, 10x speedup with snapshots
+- T11: ADRs 0001-0003 (M, 1-2d) - Event sourcing, serialization, SegmentedList
+- T12: Architecture docs (M, 1-2d) - EventStore design, concurrency model
+- T13: API docs (M, 1-2d) - All public APIs documented with examples
 
 **Path:** T1→T2→T3→T5→T7→T8→T9→Demo
 
@@ -658,6 +767,110 @@ pub const ValidationCtx = struct {
 ## Testing (Test Categories, NOT Coverage %)
 
 **Zig has no coverage tool. Specify test categories instead of "90% coverage":**
+
+### CRITICAL: Test Helper Functions (IMPLEMENT THESE FIRST)
+
+**Standard Test Template (USE FOR ALL TESTS):**
+```zig
+test "descriptive name" {
+    // Setup with leak detection
+    var gpa = std.heap.GeneralPurposeAllocator(.{ .thread_safe = true }){};
+    defer {
+        const leaked = gpa.deinit();
+        if (leaked == .leak) {
+            std.debug.print("WARNING: Memory leak detected\n", .{});
+        }
+    }
+    const allocator = gpa.allocator();
+
+    // Component under test
+    var store = try EventStore.init(allocator);
+    defer store.deinit();
+
+    // Test logic using helpers below
+    const obj_id = makeObjectiveId(1);
+    const event = makeTestEvent(obj_id);
+
+    // Assertions
+    try testing.expectEqual(expected, result);
+}
+```
+
+**Required Test Helpers:**
+```zig
+// Deterministic ID generation (consistent across tests)
+fn makeObjectiveId(seed: u32) [32]u8 {
+    var id: [32]u8 = undefined;
+    std.mem.writeInt(u32, id[0..4], seed, .little);
+    // Remaining bytes stay zero-initialized
+    return id;
+}
+
+fn makeChannelId(seed: u32) [32]u8 {
+    var id: [32]u8 = undefined;
+    std.mem.writeInt(u32, id[0..4], seed, .little);
+    return id;
+}
+
+// Consistent timestamps for tests
+fn timestamp() u64 {
+    return @intCast(std.time.milliTimestamp());
+}
+
+// Valid participants array (DON'T use empty arrays!)
+fn makeTwoParticipants() [2][20]u8 {
+    return [2][20]u8{
+        [_]u8{0x74} ++ [_]u8{0} ** 19,
+        [_]u8{0x86} ++ [_]u8{0} ** 19,
+    };
+}
+
+// Create a simple test event
+fn makeTestEvent(id: u32) Event {
+    var obj_id: [32]u8 = undefined;
+    std.mem.writeInt(u32, obj_id[0..4], id, .little);
+
+    var chan_id: [32]u8 = undefined;
+    std.mem.writeInt(u32, chan_id[0..4], id, .little);
+
+    return Event{
+        .objective_created = .{
+            .timestamp_ms = @intCast(std.time.milliTimestamp()),
+            .objective_id = obj_id,
+            .objective_type = .DirectFund,
+            .channel_id = chan_id,
+            .participants = &[_][20]u8{},  // Empty OK for simple tests without validation
+        },
+    };
+}
+```
+
+**CRITICAL: For validation tests, use actual participants:**
+```zig
+test "validation test example" {
+    const allocator = testing.allocator;
+
+    // Allocate valid participants (don't use empty array!)
+    var participants = try allocator.alloc([20]u8, 2);
+    defer allocator.free(participants);
+    participants[0] = [_]u8{0x74} ++ [_]u8{0} ** 19;
+    participants[1] = [_]u8{0x86} ++ [_]u8{0} ** 19;
+
+    const event = Event{
+        .objective_created = .{
+            .timestamp_ms = 1704067200000,
+            .objective_id = makeObjectiveId(1),
+            .objective_type = .DirectFund,
+            .channel_id = makeChannelId(1),
+            .participants = participants,  // ✅ Passes validation (2+ participants)
+        },
+    };
+
+    // ... validation test
+}
+```
+
+---
 
 ### Required Test Categories
 
@@ -861,6 +1074,208 @@ fn benchReconstruct(b: *Benchmark) !void {
     // Target: <100ms P95
 }
 ```
+
+---
+
+## Common Pitfalls & Solutions
+
+**Learn from Phase 1a implementation issues. Avoid these mistakes:**
+
+### Pitfall 1: Empty Participants Array in Tests
+
+```zig
+// ❌ WRONG - violates validation (requires 2+ participants)
+fn makeTestEvent(id: u32) Event {
+    return Event{
+        .objective_created = .{
+            .participants = &[_][20]u8{},  // ❌ Empty! Fails validation
+            // ...
+        },
+    };
+}
+
+// ✅ CORRECT - use helper for valid participants
+fn makeValidTestEvent(allocator: Allocator, id: u32) !Event {
+    var participants = try allocator.alloc([20]u8, 2);
+    participants[0] = [_]u8{0x74} ++ [_]u8{0} ** 19;
+    participants[1] = [_]u8{0x86} ++ [_]u8{0} ** 19;
+
+    return Event{
+        .objective_created = .{
+            .participants = participants,  // ✅ Passes validation
+            // ...
+        },
+    };
+}
+```
+
+### Pitfall 2: Using Old Zig 0.14 ArrayList API
+
+```zig
+// ❌ WRONG (Zig 0.14 API - will not compile on 0.15)
+var list = std.ArrayList(T).init(allocator);
+list.append(item);
+list.deinit();
+
+// ✅ CORRECT (Zig 0.15 API)
+var list = std.ArrayList(T){};  // Struct literal, no .init()
+try list.append(allocator, item);  // Explicit allocator
+list.deinit(allocator);  // Explicit allocator
+```
+
+### Pitfall 3: Forgetting errdefer for Error Cleanup
+
+```zig
+// ❌ WRONG - leaks on error
+pub fn allocateAndProcess(allocator: Allocator) ![]u8 {
+    const data = try allocator.alloc(u8, 100);
+    try someOperation();  // If this fails, `data` leaks!
+    return data;
+}
+
+// ✅ CORRECT - cleanup on error
+pub fn allocateAndProcess(allocator: Allocator) ![]u8 {
+    const data = try allocator.alloc(u8, 100);
+    errdefer allocator.free(data);  // ✅ Cleanup if error occurs
+    try someOperation();
+    return data;
+}
+```
+
+### Pitfall 4: Two-Pass Filtering (Inefficient)
+
+```zig
+// ❌ INEFFICIENT - iterates event log twice
+fn getObjectiveEvents(self: *Self, id: [32]u8) ![]Event {
+    const all_events = try self.store.readAll();
+    defer self.allocator.free(all_events);
+
+    // First pass: count matches
+    var count: usize = 0;
+    for (all_events) |e| if (matches(e, id)) count += 1;
+
+    // Second pass: copy matches
+    const result = try self.allocator.alloc(Event, count);
+    var i: usize = 0;
+    for (all_events) |e| if (matches(e, id)) { result[i] = e; i += 1; }
+
+    return result;
+}
+
+// ✅ EFFICIENT - single pass with ArrayList
+fn getObjectiveEvents(self: *Self, id: [32]u8) ![]Event {
+    const all_events = try self.store.readAll();
+    defer self.allocator.free(all_events);
+
+    var result = std.ArrayList(Event){};
+    defer result.deinit(self.allocator);
+
+    for (all_events) |event| {
+        if (isObjectiveEvent(event, id)) {
+            try result.append(self.allocator, event);
+        }
+    }
+
+    return result.toOwnedSlice(self.allocator);
+}
+```
+
+### Pitfall 5: Dangling Slice Pointers
+
+```zig
+// ❌ WRONG - participants freed before store uses it
+test "dangling pointer" {
+    var store = try EventStore.init(allocator);
+    defer store.deinit();
+
+    {
+        var participants = try allocator.alloc([20]u8, 2);
+        defer allocator.free(participants);  // ❌ Freed at end of block!
+
+        _ = try store.append(Event{
+            .channel_created = .{ .participants = participants },
+        });
+    }  // participants freed here, but store still has pointer!
+
+    const event = try store.readAt(0);  // ❌ Use-after-free
+}
+
+// ✅ CORRECT - participants lives as long as store
+test "correct lifetime" {
+    var store = try EventStore.init(allocator);
+    defer store.deinit();
+
+    var participants = try allocator.alloc([20]u8, 2);
+    // Don't free until AFTER store.deinit()
+
+    _ = try store.append(Event{
+        .channel_created = .{ .participants = participants },
+    });
+
+    const event = try store.readAt(0);  // ✅ Safe - participants still alive
+
+    allocator.free(participants);  // Free after store.deinit()
+}
+```
+
+### Pitfall 6: Not Testing Concurrency
+
+```zig
+// ❌ INCOMPLETE - only tests single-threaded append
+test "append works" {
+    var store = try EventStore.init(allocator);
+    defer store.deinit();
+    _ = try store.append(event);
+    try testing.expectEqual(@as(u64, 1), store.len());
+}
+
+// ✅ COMPLETE - also tests thread safety
+test "concurrent appends are atomic" {
+    var gpa = std.heap.GeneralPurposeAllocator(.{ .thread_safe = true }){};
+    defer _ = gpa.deinit();
+    const allocator = gpa.allocator();
+
+    var store = try EventStore.init(allocator);
+    defer store.deinit();
+
+    var pool: std.Thread.Pool = undefined;
+    try pool.init(.{ .allocator = allocator });
+    defer pool.deinit();
+
+    // Spawn 10 threads, each appending 100 events
+    // ... (see concurrency test pattern above)
+
+    // Verify ALL 1000 appends succeeded atomically
+    try testing.expectEqual(@as(u64, 1000), store.len());
+}
+```
+
+### Pitfall 7: Missing Performance Assertions
+
+```zig
+// ❌ INCOMPLETE - measures but doesn't assert
+test "reconstruction performance" {
+    // ... setup 1000 events ...
+    const start = std.time.milliTimestamp();
+    const state = try reconstructor.reconstructObjective(obj_id);
+    const elapsed = std.time.milliTimestamp() - start;
+    std.debug.print("Time: {d}ms\n", .{elapsed});
+    // ❌ No assertion - regressions won't be caught!
+}
+
+// ✅ COMPLETE - asserts performance requirement
+test "reconstruction performance" {
+    // ... setup 1000 events ...
+    const start = std.time.milliTimestamp();
+    const state = try reconstructor.reconstructObjective(obj_id);
+    const elapsed = std.time.milliTimestamp() - start;
+
+    std.debug.print("Reconstruction time: {d}ms\n", .{elapsed});
+    try testing.expect(elapsed < 100);  // ✅ Fails if regression
+}
+```
+
+---
 
 ## Docs
 
