@@ -10,16 +10,17 @@
 - `std.json` for request/response parsing
 
 **evmts/voltaire (RECOMMENDED):**
-- Full Ethereum lib: RPC, ABI, RLP, tx parsing, wallet
-- TypeScript-based, may need WASM bindings or Zig interop
+- Full Ethereum lib: ABI, RLP, tx parsing, wallet, crypto
+- Zig/WASM-based, native Zig support + TypeScript via WASM
 - Already includes secp256k1 + Keccak (dep for P2)
 
-**JSON-RPC libs:**
-- `zigjr` - lightweight JSON-RPC 2.0 (std.json)
-- `zig-json-rpc` - protocol impl
-- Roll own with std.http + std.json (more work)
+**evmts/chappe (JSON-RPC):**
+- Zig/WASM JSON-RPC client library
+- Part of evmts ecosystem
+- Native Zig support + TypeScript via WASM
+- Integrates with voltaire and guillotine
 
-**Rec:** Use evmts/voltaire - covers P2 (crypto) + P7 (RPC) in one dep
+**Rec:** Use evmts/voltaire + evmts/chappe - covers P2 (crypto) + P7 (RPC) in one stack
 
 ## Summary
 
@@ -49,7 +50,7 @@ Ethereum chain integration - deposit detection, tx submission, event listening, 
 
 ## Architecture
 
-**Components:** RpcClient (JSON-RPC calls), EventListener (subscribe to contracts), TxBuilder (construct signed txs), ChainService (high-level API)
+**Components:** RpcClient (evmts/chappe for JSON-RPC), EventListener (subscribe to contracts), TxBuilder (construct signed txs), ChainService (high-level API)
 
 **Flow:**
 ```
@@ -123,7 +124,7 @@ pub fn onDeposited(self: *ChainService, callback: DepositCallback) !void;
 - Events detected
 
 **Integration:**
-- Local anvil node + deployed contracts
+- evmts/guillotine (local Ethereum node) + deployed contracts
 - Submit deposit → wait 12 blocks → event detected
 
 **Reorg:**
@@ -132,8 +133,8 @@ pub fn onDeposited(self: *ChainService, callback: DepositCallback) !void;
 ## Dependencies
 
 **Req:** P2 (State/Sig), P3 (Objectives), Zig 0.15+
-**External:** evmts/voltaire (RPC + tx + ABI), Ethereum node (Geth/Anvil), op-stack compatible adjudicator contracts
-**Alt:** std.http + std.json + JSON-RPC lib (fragmented, more work)
+**External:** evmts/voltaire (crypto + ABI), evmts/chappe (JSON-RPC client), evmts/guillotine (Ethereum node), op-stack compatible adjudicator contracts
+**Alt:** std.http + std.json (fragmented, more work)
 
 ## Risks
 
@@ -149,7 +150,7 @@ pub fn onDeposited(self: *ChainService, callback: DepositCallback) !void;
 
 **Code:** `src/chain/{rpc,events,service}.zig`, tests
 **Docs:** ADR-0012, `docs/architecture/chain-service.md`
-**Val:** 90%+ cov, integration passes (local node)
+**Val:** 90%+ cov, integration passes (evmts/guillotine)
 
 ## Validation Gates
 
@@ -162,7 +163,7 @@ pub fn onDeposited(self: *ChainService, callback: DepositCallback) !void;
 
 **Phases:** P2 (State), P3 (Objectives)
 **ADRs:** 0012 (Confirmation depth)
-**External:** State channel chain integration patterns, Ethereum JSON-RPC, op-stack compatible contracts
+**External:** State channel chain integration patterns, evmts/chappe (JSON-RPC), op-stack compatible contracts
 
 ## Example
 

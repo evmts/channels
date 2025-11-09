@@ -867,7 +867,7 @@ Alice ←═══════════ Virtual Channel ═══════
 │  │    P2P NETWORKING         │   │   CHAIN SERVICE                    │ │
 │  │  ┌────────────────────┐   │   │  ┌──────────────────────────────┐ │ │
 │  │  │ libp2p Host        │   │   │  │   Ethereum RPC Client        │ │ │
-│  │  │ - TCP Transport    │   │   │  │   (JSON-RPC over HTTP)       │ │ │
+│  │  │ - TCP Transport    │   │   │  │   (evmts/chappe)             │ │ │
 │  │  │ - Peer Discovery   │   │   │  └────────────┬─────────────────┘ │ │
 │  │  │ - Message Routing  │   │   │               │                    │ │
 │  │  └────────────────────┘   │   │               ▼                    │ │
@@ -1107,12 +1107,12 @@ Alice ←═══════════ Virtual Channel ═══════
 
 **Cryptography:**
 
-- **Library:** evmts/voltaire (TypeScript-based Ethereum utilities)
+- **Library:** evmts/voltaire (Zig/WASM Ethereum utilities)
   - secp256k1 ECDSA signatures
   - Keccak256 hashing
   - ABI encoding/decoding
   - RLP serialization
-- **Alternative secp256k1:** zig-eth-secp256k1 (if evmts/voltaire insufficient)
+  - Native Zig support + TypeScript bindings via WASM
 
 **Database (Derived State):**
 
@@ -1144,9 +1144,10 @@ Alice ←═══════════ Virtual Channel ═══════
 
 **Ethereum Integration:**
 
-- **RPC Client:** evmts/voltaire HTTP client or custom via http.zig
+- **RPC Client:** evmts/chappe (JSON-RPC client)
   - JSON-RPC 2.0
   - WebSocket subscriptions for events
+- **Node:** evmts/guillotine (local Ethereum node)
 - **Contract Bindings:** Code-gen from ABI (similar to abigen)
   - Parse ABI JSON
   - Generate Zig functions for contract calls
@@ -1185,8 +1186,14 @@ Alice ←═══════════ Virtual Channel ═══════
     .name = "state-channels",
     .version = "0.1.0",
     .dependencies = .{
-        // Note: evmts/voltaire is TypeScript-based, integration TBD
-        // May need WASM bindings or alternative Zig-native implementation
+        .voltaire = .{
+            .url = "https://github.com/evmts/voltaire/archive/...",
+            .hash = "...",
+        },
+        .chappe = .{
+            .url = "https://github.com/evmts/chappe/archive/...",
+            .hash = "...",
+        },
         .@"http.zig" = .{
             .url = "https://github.com/karlseguin/http.zig/archive/refs/tags/v0.1.0.tar.gz",
             .hash = "...",
@@ -2428,7 +2435,8 @@ We adopt a rigorous development methodology:
 
 4. **Chain service**
 
-   - Ethereum RPC client (JSON-RPC over HTTP)
+   - Ethereum RPC client (evmts/chappe for JSON-RPC)
+   - Node: evmts/guillotine (local Ethereum node)
    - Event listening (polling, no WebSocket yet)
    - Transaction submission (deposit, challenge, withdraw)
 
@@ -3124,11 +3132,18 @@ Events include `event_version` field (currently `1`) for schema evolution. Forwa
 - **pg.zig:** https://github.com/karlseguin/pg.zig
   - Native Zig PostgreSQL client
 
-### Ethereum Libraries
+### Ethereum Libraries (evmts)
 
-- **evmts/voltaire:** TypeScript-based Ethereum utilities
+- **evmts/voltaire:** Zig/WASM Ethereum utilities
   - Ethereum ABI encoding, secp256k1, Keccak256
-  - May require WASM bindings or Zig interop layer
+  - Native Zig + TypeScript support via WASM
+- **evmts/chappe:** Zig/WASM JSON-RPC client
+  - Native Zig + TypeScript support via WASM
+- **evmts/guillotine:** Zig/WASM Ethereum node
+  - Local development node
+
+### Other Zig Libraries
+
 - **http.zig:** https://github.com/karlseguin/http.zig
   - High-performance HTTP server
 - **zig-libp2p:** https://github.com/zen-eth/zig-libp2p
