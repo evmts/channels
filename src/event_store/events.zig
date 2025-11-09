@@ -1,5 +1,7 @@
 const std = @import("std");
-const EventStore = @import("store.zig").EventStore;
+
+// TODO: Will be regenerated from Phase 1b - EventStore dependency
+// const EventStore = @import("store.zig").EventStore;
 
 /// Objective lifecycle events
 pub const ObjectiveCreatedEvent = struct {
@@ -371,46 +373,24 @@ pub const Event = union(enum) {
 
 /// Validation context for checking event preconditions
 /// Provides access to the event store to verify objective/channel existence
+// TODO: ValidationCtx will be regenerated from Phase 1b with EventStore
+// Stub for now - validation methods temporarily disabled
 pub const ValidationCtx = struct {
-    store: *EventStore,
+    // store: *EventStore,  // TODO: Re-enable after Phase 1b
 
-    pub fn init(store: *EventStore) ValidationCtx {
-        return ValidationCtx{ .store = store };
+    pub fn init() ValidationCtx {
+        return ValidationCtx{};
     }
 
     /// Check if an objective with given ID exists in the event log
-    pub fn objectiveExists(self: *const @This(), id: [32]u8) bool {
-        const len = self.store.*.len();
-        var i: u64 = 0;
-        while (i < len) : (i += 1) {
-            const event = self.store.*.readAt(i) catch continue;
-            switch (event.*) {
-                .objective_created => |created| {
-                    if (std.mem.eql(u8, &created.objective_id, &id)) {
-                        return true;
-                    }
-                },
-                else => {},
-            }
-        }
-        return false;
+    /// TODO: Re-implement after Phase 1b EventStore regeneration
+    pub fn objectiveExists(_: *const @This(), _: [32]u8) bool {
+        return true; // Stub - always returns true
     }
 
     /// Check if a channel with given ID exists in the event log
-    pub fn channelExists(self: *const @This(), id: [32]u8) bool {
-        const len = self.store.*.len();
-        var i: u64 = 0;
-        while (i < len) : (i += 1) {
-            const event = self.store.*.readAt(i) catch continue;
-            switch (event.*) {
-                .channel_created => |created| {
-                    if (std.mem.eql(u8, &created.channel_id, &id)) {
-                        return true;
-                    }
-                },
-                else => {},
-            }
-        }
-        return false;
+    /// TODO: Re-implement after Phase 1b EventStore regeneration
+    pub fn channelExists(_: *const @This(), _: [32]u8) bool {
+        return true; // Stub - always returns true
     }
 };
