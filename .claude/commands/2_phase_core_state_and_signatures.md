@@ -1,13 +1,21 @@
 # P2: Core State & Signatures
 
-**Meta:** P2 | Deps: P1 | Owner: Core
+**Meta:** P2 | Deps: P1a (Events) | Owner: Core
 **Status:** Ready to Execute ✅
+
+**⚠️ SCOPE NOTE:** This phase is split into two parts:
+- **Phase 2a (This Prompt):** Core implementation - types, ChannelId, hashing, signatures, ABI wrapper
+- **Phase 2b (Deferred):** Event integration - requires Phase 1b EventStore to be complete
 
 ---
 
 ## Quick Start (Execute Day 1)
 
-**Pre-flight:** Voltaire integrated ✅ | P1 events complete ✅ | Tests passing ✅
+**Pre-flight:**
+- ✅ Voltaire integrated (verify in build.zig.zon)
+- ✅ P1a events complete (20 event types defined)
+- ✅ Tests passing (`zig build test`)
+- ❌ Phase 1b EventStore NOT required (event integration deferred to Phase 2b)
 
 **⚠️ CRITICAL LEARNINGS FROM PHASE 1:**
 Phase 1 cleanup revealed critical issues that MUST be avoided in Phase 2:
@@ -20,22 +28,31 @@ Phase 1 cleanup revealed critical issues that MUST be avoided in Phase 2:
 
 See detailed patterns in "Zig 0.15 Constraints & API Changes" section below.
 
-**FIRST: Update Voltaire to latest:**
+**FIRST: Verify Voltaire integration:**
 ```bash
-zig fetch --save=primitives https://github.com/evmts/primitives/archive/refs/heads/main.tar.gz
-zig build test  # Verify integration still works
+# Check current version in build.zig.zon
+grep -A 2 "primitives" build.zig.zon
+
+# Optional: Update to latest if needed
+# zig fetch --save=primitives https://github.com/evmts/primitives/archive/refs/heads/main.tar.gz
+
+# Verify integration works
+zig build test
 ```
 
-**Day 1 Checklist:**
-1. Write ADR-0004 (Signature Scheme - secp256k1 recoverable + voltaire unaudited note)
-2. Write ADR-0005 (State Encoding - Ethereum ABI packed)
-3. Write ADR-0006 (ChannelId Generation - keccak256(abi.encodePacked(fixedPart)))
-4. Create `src/state/types.zig` - State, FixedPart, VariablePart, Outcome, Allocation, Signature
-5. Create `src/state/types.test.zig` - construction, clone, invariants
-6. Create `src/state/channel_id.zig` - ChannelId generation using voltaire
-7. Create `src/state/channel_id.test.zig` - determinism, cross-impl vectors
-8. Update `src/root.zig` - export state module
-9. **CRITICAL:** Remove any debug print statements before commit (grep check below)
+**Day 1 Checklist (Phase 2a - Core Implementation):**
+1. ✅ Review ADR-0004, 0005, 0006 (already exist - verify completeness)
+2. ✅ Verify `src/state/types.zig` exists (already created - may need updates)
+3. Create `src/state/channel_id.zig` - ChannelId generation using voltaire
+4. Create `src/state/channel_id.test.zig` - determinism, cross-impl vectors from nitro-protocol
+5. Create `src/state/hash.zig` - State hashing with ABI encoding
+6. Create `src/state/hash.test.zig` - determinism, ABI encoding correctness
+7. Create `src/crypto/signature.zig` - Sign/verify with recovery
+8. Create `src/crypto/signature.test.zig` - roundtrip, recovery tests
+9. Update `src/root.zig` - export state and crypto modules
+10. **CRITICAL:** Remove any debug print statements before commit (grep check below)
+
+**Note:** Event emission (emitStateSigned, emitStateReceived, emitChannelCreated) is **DEFERRED to Phase 2b** after Phase 1b EventStore is complete.
 
 **Pre-commit verification:**
 ```bash
@@ -475,39 +492,50 @@ Test signature roundtrip, recovery.
 
 ---
 
-### Day 3: ABI Wrapper + Event Integration
+### Day 3: ABI Wrapper + Testing (Phase 2a)
 
 **Create `src/abi/encoder.zig`**
 
 Thin wrapper over voltaire AbiEncoding for state-specific encoding patterns.
 
-**Update event emission**
+**⚠️ Event Integration DEFERRED to Phase 2b:**
+- emitStateSigned() - requires EventStore.append()
+- emitStateReceived() - requires EventStore.append()
+- emitChannelCreated() - requires EventStore.append()
 
-Integrate State operations with P1 events (StateSigned, StateReceived).
+These will be implemented in Phase 2b after Phase 1b EventStore is complete.
 
 ---
 
-### Day 4: Tests + Benchmarks + Demo
+### Day 4: Integration Tests + Benchmarks + Demo (Phase 2a)
 
-**Integration tests:** Full lifecycle (Create → Sign → Verify → Emit)
+**Integration tests:** Full lifecycle (Create → Sign → Verify) - WITHOUT event emission
 **Benchmarks:** Verify <1ms ChannelId, <2ms hash, <10ms sign+verify
-**Demo:** Alice/Bob channel example
+**Demo:** Alice/Bob channel example (no EventStore dependency)
 **Documentation:** Architecture docs, API reference
 
 ---
 
-## Success Criteria (Day 4 Exit Gates)
+## Success Criteria (Consolidated - Phase 2a Exit Gates)
 
-- ✅ Types defined: State, FixedPart, VariablePart, Outcome, Signature
-- ✅ ABI encoding byte-identical to Ethereum contracts
-- ✅ ChannelId 100% match to test vectors
-- ✅ Signature verify + pubkey recovery 100% correct
-- ✅ State hash deterministic
-- ✅ Events emit for all ops (100% cov)
-- ✅ Perf: <10ms P95 sign+verify
-- ✅ 60+ tests, 90%+ cov
-- ✅ 3 ADRs approved (0004, 0005, 0006)
-- ✅ Docs + demo
+**Core Implementation (Required for Phase 2a Completion):**
+- [ ] Types verified: State, FixedPart, VariablePart, Outcome, Signature (may already exist)
+- [ ] ABI encoding matches Ethereum packed encoding (verified with test vectors)
+- [ ] ChannelId 100% match to nitro-protocol test vectors (if found) OR deterministic (same input → same output)
+- [ ] Signature verify + pubkey recovery 100% correct (roundtrip tests)
+- [ ] State hash deterministic (same state → same hash across 100 runs)
+- [ ] Perf benchmarks: <1ms ChannelId, <2ms hash, <10ms P95 sign+verify (averaged over 1000 runs on M1/M2 Mac)
+- [ ] 60+ tests passing, effective 90%+ coverage (all public APIs + error paths tested)
+- [ ] ADRs 0004-0006 reviewed and complete
+- [ ] No memory leaks (GPA leak detection in all tests)
+- [ ] No debug prints in production code (grep verification passed)
+- [ ] Documentation updated (architecture docs, API reference)
+- [ ] Demo working (Alice/Bob channel creation, signing, verification)
+
+**Deferred to Phase 2b (After Phase 1b EventStore Complete):**
+- Event emission for state operations (StateSigned, StateReceived, ChannelCreated)
+- Event integration tests
+- Full lifecycle with event sourcing
 
 ### Pre-Commit Verification Checklist (MANDATORY)
 
@@ -896,31 +924,36 @@ test "generate golden hash for ChannelId" {
 }
 ```
 
-**Cross-Implementation Test Vector:**
+**Cross-Implementation Test Vector (Phase 2a):**
 
-Add this test to verify Zig matches Solidity:
+**Strategy:** Find existing test vectors from nitro-protocol repositories:
+1. Search https://github.com/statechannels/go-nitro for ChannelId test vectors
+2. Search https://github.com/statechannels/nitro-protocol for Solidity test vectors
+3. Look for test files with known inputs/outputs (participants, nonce, appDef, challengeDuration → channelId)
+
+**Implementation:**
 ```zig
-test "ChannelId - matches Solidity reference implementation" {
-    // Test vector from Ethereum contract
-    // Inputs:
-    //   participants: [0xAAAA...AAAA, 0xBBBB...BBBB] (20 bytes each)
-    //   nonce: 42
-    //   appDef: 0x0000...0000 (20 bytes)
-    //   challengeDuration: 86400
+test "ChannelId - matches nitro-protocol test vectors" {
+    // Test vector from nitro-protocol (find via GitHub search)
+    // Example search: "channelId" "participants" "nonce" in go-nitro repo
     //
-    // Expected ChannelId: 0x... (compute in Solidity, add here)
+    // If found, copy exact inputs and expected output:
+    //   participants: [0x...actual address from test...]
+    //   nonce: actual value
+    //   appDef: 0x...actual address...
+    //   challengeDuration: actual value
+    //   expected: 0x...actual channelId from test...
 
-    const alice: types.Address = [_]u8{0xAA} ** 20;
-    const bob: types.Address = [_]u8{0xBB} ** 20;
+    const alice: types.Address = [_]u8{0xAA} ** 20;  // Replace with actual
+    const bob: types.Address = [_]u8{0xBB} ** 20;    // Replace with actual
     // ... implementation
 
-    // TODO: Replace with actual hash from Solidity contract
-    const expected_id = [_]u8{0x00} ** 32; // PLACEHOLDER
+    const expected_id = [_]u8{0x00} ** 32; // Replace with actual from nitro-protocol
     try testing.expectEqualSlices(u8, &expected_id, &computed_id);
 }
 ```
 
-Generate expected value by deploying test contract with same inputs.
+**If no vectors found:** Use deterministic testing (same inputs → same output across multiple runs) and defer cross-impl validation to later phase when Solidity contracts are available.
 
 **Integration:**
 - Full lifecycle: Create → Sign → Verify → Emit → Reconstruct
