@@ -14,8 +14,18 @@ pub const event_store = struct {
 // State modules
 pub const state = struct {
     pub const types = @import("state/types.zig");
-    // TODO: Regenerate from Phase 2 prompt
-    // pub const channel_id = @import("state/channel_id.zig");
+    pub const channel_id = @import("state/channel_id.zig");
+    pub const hash = @import("state/hash.zig");
+};
+
+// Crypto modules
+pub const crypto = struct {
+    pub const signature = @import("crypto/signature.zig");
+};
+
+// ABI encoding modules
+pub const abi = struct {
+    pub const encoder = @import("abi/encoder.zig");
 };
 
 pub fn bufferedPrint() !void {
@@ -43,5 +53,8 @@ test "basic add functionality" {
 test {
     @import("std").testing.refAllDecls(@This());
     _ = @import("event_store/events.test.zig");
+    _ = @import("state/channel_id.test.zig");
+    _ = @import("state/hash.test.zig");
+    _ = @import("crypto/signature.test.zig");
     _ = @import("integration.test.zig");
 }
