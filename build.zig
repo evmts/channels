@@ -24,6 +24,15 @@ pub fn build(b: *std.Build) void {
     // This creates a module, which represents a collection of source files alongside
     // some compilation options, such as optimization mode and linked system libraries.
     // Zig modules are the preferred way of making Zig code available to consumers.
+    // Get primitives dependency (voltaire)
+    const primitives_dep = b.dependency("primitives", .{
+        .target = target,
+        .optimize = optimize,
+    });
+    const primitives_mod = primitives_dep.module("primitives");
+    const crypto_mod = primitives_dep.module("crypto");
+    const precompiles_mod = primitives_dep.module("precompiles");
+
     // addModule defines a module that we intend to make available for importing
     // to our consumers. We must give it a name because a Zig package can expose
     // multiple modules and consumers will need to be able to specify which
@@ -39,6 +48,11 @@ pub fn build(b: *std.Build) void {
         // Later on we'll use this module as the root module of a test executable
         // which requires us to specify a target.
         .target = target,
+        .imports = &.{
+            .{ .name = "primitives", .module = primitives_mod },
+            .{ .name = "crypto", .module = crypto_mod },
+            .{ .name = "precompiles", .module = precompiles_mod },
+        },
     });
 
     // Here we define an executable. An executable needs to have a root module
