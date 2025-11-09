@@ -2,6 +2,12 @@
 
 **Event-sourced state channels in Zig** - Instant, verifiable, ephemeral applications inheriting Ethereum security without blockchain cost/latency.
 
+## Planning
+
+We always plan before implementing. Our plans should be concise and really easy to read and audit quickly. Concise, use bullets, don't use complete sentences if not necessary, and be ruthlessly straight forward.
+
+Our plans should never include time estimates.
+
 ## What This Is
 
 State channel infrastructure for high-throughput applications (games, collaborative sessions, interactive media). Not for DeFi or permanent storage.
@@ -15,6 +21,7 @@ State channel infrastructure for high-throughput applications (games, collaborat
 Traditional channels store opaque state snapshots. This system stores ordered message logs, derives state deterministically via WASM execution. Anyone can replay message log to verify correctness - no crypto proofs needed.
 
 **Benefits:**
+
 - Complete audit trail (time-travel debugging)
 - Transparent state derivation (verifiable by anyone)
 - Compact on-chain representation (logs smaller than full state)
@@ -32,6 +39,7 @@ Traditional channels store opaque state snapshots. This system stores ordered me
 ## Development Approach
 
 **Prompt-driven, phased implementation:**
+
 - 12 phases over 12-18 months
 - Each phase independently valuable/testable
 - Doc→Test→Code methodology (ADRs → specs → tests → implementation)
@@ -40,6 +48,7 @@ Traditional channels store opaque state snapshots. This system stores ordered me
 **Current phase:** Phase 1 (Event Sourcing Infrastructure)
 
 **Phases:**
+
 1. Event sourcing foundation
 2. Core state & signatures
 3. DirectFund protocol
@@ -60,28 +69,33 @@ Built for **op-stack** L2s with WASM state derivation support. Follows state cha
 ## Documentation Map
 
 **New to the project?** Start here:
+
 1. This README (you are here) - Overview and quick start
 2. [docs/prd.md](docs/prd.md) - Product vision and complete requirements
 3. [docs/LEARNING_PATHS.md](docs/LEARNING_PATHS.md) - Guided reading for different roles
 4. [docs/context.md](docs/context.md) - Prior art (Nitro, Perun, Arbitrum, event sourcing patterns)
 
 **Implementing a phase?** Read these:
+
 - [.claude/commands/README.md](.claude/commands/README.md) - Phase roadmap and dependency graph
-- [.claude/commands/N_phase_*.md](.claude/commands/N_phase_*.md) - Your specific phase spec
+- [.claude/commands/N*phase*\*.md](.claude/commands/N_phase_*.md) - Your specific phase spec
 - [docs/phase-template.md](docs/phase-template.md) - What each phase section means
 - [docs/adrs/README.md](docs/adrs/README.md) - ADRs your phase creates/depends on
 - [CLAUDE.md](CLAUDE.md) - Coding conventions and workflow
 
 **Understanding architecture?** See:
+
 - [docs/architecture/](docs/architecture/) - Design documents and component specs
 - [docs/adrs/](docs/adrs/) - Architectural decisions with rationale
 - [docs/prd.md](docs/prd.md) §5 - System architecture overview
 
 **Writing tests?** Read:
+
 - [CLAUDE.md](CLAUDE.md) - TDD approach and Zig conventions
 - [docs/fuzz-tests.md](docs/fuzz-tests.md) - Zig fuzz testing guide (Linux/Docker)
 
 **Working with AI?** Check:
+
 - [CLAUDE.md](CLAUDE.md) - AI assistant instructions and prompt-driven methodology
 - [.claude/commands/0_plan_phases.md](.claude/commands/0_plan_phases.md) - Planning approach
 - [docs/phase-template.md](docs/phase-template.md) & [docs/adr-template.md](docs/adr-template.md) - Templates
@@ -89,30 +103,35 @@ Built for **op-stack** L2s with WASM state derivation support. Follows state cha
 ## Getting Started
 
 Install dependencies:
+
 ```bash
 bun install
 ```
 
 Run:
+
 ```bash
 bun run index.ts
 ```
 
 Build Zig:
+
 ```bash
 zig build
 ```
 
 Test Zig:
+
 ```bash
 zig build test
 ```
 
 Fuzz test (Linux/Docker only - see [fuzz testing guide](docs/fuzz-tests.md)):
+
 ```bash
 zig build test --fuzz
 ```
 
 ---
 
-*This project uses Bun (fast all-in-one JavaScript runtime) and Zig for systems programming.*
+_This project uses Bun (fast all-in-one JavaScript runtime) and Zig for systems programming._
