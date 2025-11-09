@@ -1309,12 +1309,81 @@ test "reconstruction performance" {
 **Docs:** 3 ADRs, architecture docs, API reference
 **Validation:** Coverage report (90%+), benchmarks (<100ms), integration test passes
 
+## Code Review Checklist (Run Before Committing)
+
+**Run this checklist before marking Phase 1b complete:**
+
+### Memory Safety ✓
+- [ ] All allocations have corresponding `defer` or `errdefer`
+- [ ] GPA leak detection enabled in ALL tests (`defer { const leaked = gpa.deinit(); ...}`)
+- [ ] No dangling pointers to stack-allocated data (especially event slices)
+- [ ] Event slice lifetimes documented (participants, app_data, etc.)
+- [ ] No use-after-free bugs (checked with AddressSanitizer if available)
+
+### Thread Safety ✓
+- [ ] All EventStore mutations use write lock (`rw_lock.lock()`)
+- [ ] All EventStore reads use read lock (`rw_lock.lockShared()`)
+- [ ] Atomic operations for lock-free reads (`count.load(.monotonic)`)
+- [ ] No data races in concurrent tests (verified with Thread.Pool tests)
+- [ ] Subscriber callbacks receive stable pointers (SegmentedList guarantee)
+
+### Validation ✓
+- [ ] All test events pass validation rules (2+ participants, challenge_duration ≥ 1, etc.)
+- [ ] ValidationCtx tests exercise both success paths AND error paths
+- [ ] Preconditions documented in event validation comments
+- [ ] Postconditions documented in event validation comments
+
+### Performance ✓
+- [ ] Reconstruction <100ms for 10K events (measured in tests)
+- [ ] Reconstruction <1ms for 1K events (target achieved in current implementation)
+- [ ] No O(n²) algorithms (single-pass filtering with ArrayList)
+- [ ] Snapshot acceleration tested (10x speedup demonstrated)
+- [ ] Performance tests include assertions (not just measurements)
+
+### Zig 0.15 Compliance ✓
+- [ ] ArrayList uses struct literal `{}` (NOT `.init(allocator)`)
+- [ ] All ArrayList methods pass allocator explicitly
+- [ ] No `.init()` calls on ArrayList
+- [ ] Thread.Pool uses `.init(.{ .allocator = ... })`
+- [ ] SegmentedList uses `std.SegmentedList(T, N)` (NOT `std.segmented_list.SegmentedList`)
+
+### Test Coverage ✓
+- [ ] Unit tests for all public methods (EventStore, StateReconstructor, SnapshotManager)
+- [ ] Integration tests for full workflows (append → reconstruct, snapshot acceleration)
+- [ ] Concurrency tests with Thread.Pool (10 threads × 100 appends = 1000 events)
+- [ ] Performance tests with timing assertions (<100ms requirement)
+- [ ] Golden vectors for ID derivation (all 20 event types, not just 4)
+- [ ] Memory leak tests (GPA detects leaks in 10K event test)
+
+### Serialization ✓
+- [ ] ObjectiveState to/from JSON implemented
+- [ ] ChannelState to/from JSON implemented
+- [ ] Event to/from JSON implemented for all 20 event types
+- [ ] Round-trip tests verify data preservation
+- [ ] Snapshot serialization uses JSON format
+
+### Code Quality ✓
+- [ ] No `unreachable` in production code (only in test callbacks)
+- [ ] All public APIs documented with doc comments
+- [ ] Complex algorithms have inline comments explaining logic
+- [ ] No TODO/FIXME comments in committed code
+- [ ] Error handling follows Zig idioms (no swallowed errors)
+
+### Build & CI ✓
+- [ ] `zig build test` passes with all tests green
+- [ ] No compiler warnings
+- [ ] No AddressSanitizer errors (if available)
+- [ ] All test files imported in `root.zig`
+- [ ] Build completes in <30 seconds
+
+---
+
 ## Validation Gates
 
-**G1 (Design→Code):** ADRs approved, API reviewed, test strategy OK
-**G2 (During):** 2+ reviewers, no criticals, cov met
-**G3 (Pre-Done):** CI green, perf met, integration OK
-**G4 (Accept):** Demo, deliverables in, docs published, sign-off
+**G1 (Design→Code):** ADRs approved, API reviewed, test strategy OK, checklist reviewed
+**G2 (During):** 2+ reviewers, no criticals, checklist items tracked
+**G3 (Pre-Done):** CI green, perf met, integration OK, **checklist 100% complete**
+**G4 (Accept):** Demo, deliverables in, docs published, sign-off, **checklist verified**
 
 ## Refs
 
