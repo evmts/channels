@@ -147,7 +147,7 @@
 - ✅ Hardware wallet support
 - ⚠️ Slower than ed25519 (acceptable: <5ms)
 
-**Implementation:** Use zabi library for secp256k1 + Keccak256
+**Implementation:** Use evmts/voltaire library for secp256k1 + Keccak256
 
 **Format:** 65 bytes (r=32, s=32, v=1)
 

@@ -7,26 +7,39 @@ const Event = events.Event;
 const ValidationCtx = events.ValidationCtx;
 
 // Test helper to create validation context
-// Returns a fresh EventStore for each test call to avoid state pollution
+// Returns a fresh EventStore using EventStore.init which handles allocation properly
 const StoreModule = @import("store.zig");
 const EventStore = StoreModule.EventStore;
 
 fn createTestCtx() !struct { ctx: ValidationCtx, store: *EventStore } {
     const allocator = testing.allocator;
-    const store = try allocator.create(EventStore);
-    store.* = .{
-        .allocator = allocator,
-        .events = .{},
-        .subscribers = std.ArrayList(StoreModule.EventCallback){},
-        .rw_lock = .{},
-        .count = std.atomic.Value(u64).init(0),
-    };
+    const store = try EventStore.init(allocator);
     return .{ .ctx = ValidationCtx.init(store), .store = store };
 }
 
 fn cleanupStore(store: *EventStore) void {
+    // EventStore.deinit handles destroying itself and its internal resources
     store.deinit();
-    testing.allocator.destroy(store);
+}
+
+fn addTestChannel(store: *EventStore) !void {
+    const allocator = testing.allocator;
+    var participants = try allocator.alloc([20]u8, 2);
+    defer allocator.free(participants);
+    participants[0] = [_]u8{0x12} ++ [_]u8{0} ** 19;
+    participants[1] = [_]u8{0x34} ++ [_]u8{0} ** 19;
+
+    const channel_created = Event{
+        .channel_created = events.ChannelCreatedEvent{
+            .timestamp_ms = 1704067200000,
+            .channel_id = [_]u8{0x12} ** 32,
+            .participants = participants,
+            .channel_nonce = 42,
+            .app_definition = [_]u8{0xaa} ++ [_]u8{0} ** 19,
+            .challenge_duration = 3600,
+        },
+    };
+    _ = try store.append(channel_created);
 }
 
 // ===== Objective Events Tests =====
@@ -227,8 +240,9 @@ test "ChannelCreatedEvent - validates challenge duration" {
         .challenge_duration = 3600,
     };
 
-    const ctx = createTestCtx();
-    try evt.validate(&ctx);
+    const result = try createTestCtx();
+    defer cleanupStore(result.store);
+    try evt.validate(&result.ctx);
 }
 
 test "ChannelCreatedEvent - rejects zero challenge duration" {
@@ -249,8 +263,9 @@ test "ChannelCreatedEvent - rejects zero challenge duration" {
         .challenge_duration = 0, // invalid
     };
 
-    const ctx = createTestCtx();
-    try testing.expectError(error.InvalidChallengeDuration, evt.validate(&ctx));
+    const result = try createTestCtx();
+    defer cleanupStore(result.store);
+    try testing.expectError(error.InvalidChallengeDuration, evt.validate(&result.ctx));
 }
 
 test "StateSignedEvent - full event structure" {
@@ -265,12 +280,18 @@ test "StateSignedEvent - full event structure" {
         .app_data_hash = [_]u8{0} ** 32,
     };
 
-    const ctx = createTestCtx();
-    try evt.validate(&ctx);
+    const result = try createTestCtx();
+    defer cleanupStore(result.store);
+    try addTestChannel(result.store);
+    try evt.validate(&result.ctx);
 }
 
 test "StateReceivedEvent - includes peer ID" {
     const allocator = testing.allocator;
+    const result = try createTestCtx();
+    defer cleanupStore(result.store);
+    try addTestChannel(result.store);
+
     const peer_id = try allocator.dupe(u8, "peer-node-123");
     defer allocator.free(peer_id);
 
@@ -285,8 +306,7 @@ test "StateReceivedEvent - includes peer ID" {
         .peer_id = peer_id,
     };
 
-    const ctx = createTestCtx();
-    try evt.validate(&ctx);
+    try evt.validate(&result.ctx);
 }
 
 test "StateSupportedUpdatedEvent - enforces turn progression" {
@@ -299,8 +319,10 @@ test "StateSupportedUpdatedEvent - enforces turn progression" {
         .prev_supported_turn = 8,
     };
 
-    const ctx = createTestCtx();
-    try evt.validate(&ctx);
+    const result = try createTestCtx();
+    defer cleanupStore(result.store);
+    try addTestChannel(result.store);
+    try evt.validate(&result.ctx);
 }
 
 test "StateSupportedUpdatedEvent - rejects backwards turn progression" {
@@ -313,8 +335,10 @@ test "StateSupportedUpdatedEvent - rejects backwards turn progression" {
         .prev_supported_turn = 10,
     };
 
-    const ctx = createTestCtx();
-    try testing.expectError(error.InvalidTurnProgression, evt.validate(&ctx));
+    const result = try createTestCtx();
+    defer cleanupStore(result.store);
+    try addTestChannel(result.store);
+    try testing.expectError(error.InvalidTurnProgression, evt.validate(&result.ctx));
 }
 
 test "StateSupportedUpdatedEvent - rejects zero signatures" {
@@ -327,8 +351,10 @@ test "StateSupportedUpdatedEvent - rejects zero signatures" {
         .prev_supported_turn = 8,
     };
 
-    const ctx = createTestCtx();
-    try testing.expectError(error.NoSignatures, evt.validate(&ctx));
+    const result = try createTestCtx();
+    defer cleanupStore(result.store);
+    try addTestChannel(result.store);
+    try testing.expectError(error.NoSignatures, evt.validate(&result.ctx));
 }
 
 test "ChannelFinalizedEvent - tracks finalization" {
@@ -339,8 +365,10 @@ test "ChannelFinalizedEvent - tracks finalization" {
         .final_state_hash = [_]u8{0xff} ** 32,
     };
 
-    const ctx = createTestCtx();
-    try evt.validate(&ctx);
+    const result = try createTestCtx();
+    defer cleanupStore(result.store);
+    try addTestChannel(result.store);
+    try evt.validate(&result.ctx);
 }
 
 // ===== Chain Bridge Events Tests =====
@@ -363,8 +391,10 @@ test "DepositDetectedEvent - tracks on-chain deposit" {
         .now_held = held,
     };
 
-    const ctx = createTestCtx();
-    try evt.validate(&ctx);
+    const result = try createTestCtx();
+    defer cleanupStore(result.store);
+    try addTestChannel(result.store);
+    try evt.validate(&result.ctx);
 }
 
 test "ChallengeRegisteredEvent - includes finalization time" {
@@ -381,8 +411,10 @@ test "ChallengeRegisteredEvent - includes finalization time" {
         .candidate_state_hash = [_]u8{0xbb} ** 32,
     };
 
-    const ctx = createTestCtx();
-    try evt.validate(&ctx);
+    const result = try createTestCtx();
+    defer cleanupStore(result.store);
+    try addTestChannel(result.store);
+    try evt.validate(&result.ctx);
 }
 
 test "ChallengeClearedEvent - clears challenge" {
@@ -395,8 +427,10 @@ test "ChallengeClearedEvent - clears challenge" {
         .new_turn_num_record = 20,
     };
 
-    const ctx = createTestCtx();
-    try evt.validate(&ctx);
+    const result = try createTestCtx();
+    defer cleanupStore(result.store);
+    try addTestChannel(result.store);
+    try evt.validate(&result.ctx);
 }
 
 test "ChannelConcludedEvent - concludes on-chain" {
@@ -409,12 +443,18 @@ test "ChannelConcludedEvent - concludes on-chain" {
         .finalized_at_turn = 50,
     };
 
-    const ctx = createTestCtx();
-    try evt.validate(&ctx);
+    const result = try createTestCtx();
+    defer cleanupStore(result.store);
+    try addTestChannel(result.store);
+    try evt.validate(&result.ctx);
 }
 
 test "WithdrawCompletedEvent - tracks withdrawal" {
     const allocator = testing.allocator;
+    const result = try createTestCtx();
+    defer cleanupStore(result.store);
+    try addTestChannel(result.store);
+
     const amount = try allocator.dupe(u8, "500000000000000000");
     defer allocator.free(amount);
 
@@ -429,8 +469,7 @@ test "WithdrawCompletedEvent - tracks withdrawal" {
         .amount = amount,
     };
 
-    const ctx = createTestCtx();
-    try evt.validate(&ctx);
+    try evt.validate(&result.ctx);
 }
 
 // ===== Messaging Events Tests =====
@@ -451,8 +490,9 @@ test "MessageSentEvent - tracks sent message" {
         .payload_size_bytes = 512,
     };
 
-    const ctx = createTestCtx();
-    try evt.validate(&ctx);
+    const result = try createTestCtx();
+    defer cleanupStore(result.store);
+    try evt.validate(&result.ctx);
 }
 
 test "MessageReceivedEvent - tracks received message" {
@@ -469,8 +509,9 @@ test "MessageReceivedEvent - tracks received message" {
         .payload_size_bytes = 256,
     };
 
-    const ctx = createTestCtx();
-    try evt.validate(&ctx);
+    const result = try createTestCtx();
+    defer cleanupStore(result.store);
+    try evt.validate(&result.ctx);
 }
 
 test "MessageAckedEvent - tracks roundtrip time" {
@@ -485,8 +526,9 @@ test "MessageAckedEvent - tracks roundtrip time" {
         .roundtrip_ms = 150,
     };
 
-    const ctx = createTestCtx();
-    try evt.validate(&ctx);
+    const result = try createTestCtx();
+    defer cleanupStore(result.store);
+    try evt.validate(&result.ctx);
 }
 
 test "MessageDroppedEvent - categorizes errors" {
@@ -505,8 +547,9 @@ test "MessageDroppedEvent - categorizes errors" {
         .payload_size_bytes = 128,
     };
 
-    const ctx = createTestCtx();
-    try evt.validate(&ctx);
+    const result = try createTestCtx();
+    defer cleanupStore(result.store);
+    try evt.validate(&result.ctx);
 }
 
 // ===== Event Union Tests =====
@@ -529,12 +572,32 @@ test "Event union - wraps all event types" {
         },
     };
 
-    const ctx = createTestCtx();
-    try evt_created.validate(&ctx);
+    const result = try createTestCtx();
+    defer cleanupStore(result.store);
+    try evt_created.validate(&result.ctx);
 }
 
 test "Event union - validates via switch" {
     const allocator = testing.allocator;
+    const result = try createTestCtx();
+    defer cleanupStore(result.store);
+
+    // First add objective to store
+    var participants = try allocator.alloc([20]u8, 2);
+    defer allocator.free(participants);
+    participants[0] = [_]u8{0x74} ++ [_]u8{0} ** 19;
+    participants[1] = [_]u8{0x86} ++ [_]u8{0} ** 19;
+
+    const objective_created = Event{
+        .objective_created = events.ObjectiveCreatedEvent{
+            .timestamp_ms = 1704067200000,
+            .objective_id = [_]u8{0xaa} ** 32,
+            .objective_type = .DirectFund,
+            .channel_id = [_]u8{0xbb} ** 32,
+            .participants = participants,
+        },
+    };
+    _ = try result.store.append(objective_created);
 
     const reason = try allocator.dupe(u8, "test");
     defer allocator.free(reason);
@@ -548,8 +611,7 @@ test "Event union - validates via switch" {
         },
     };
 
-    const ctx = createTestCtx();
-    try evt.validate(&ctx);
+    try evt.validate(&result.ctx);
 }
 
 // ===== Golden Test Vector Tests =====

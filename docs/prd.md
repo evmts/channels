@@ -1107,12 +1107,12 @@ Alice ←═══════════ Virtual Channel ═══════
 
 **Cryptography:**
 
-- **Library:** Zabi (https://github.com/Raiden1411/zabi)
+- **Library:** evmts/voltaire (TypeScript-based Ethereum utilities)
   - secp256k1 ECDSA signatures
   - Keccak256 hashing
   - ABI encoding/decoding
   - RLP serialization
-- **Alternative secp256k1:** zig-eth-secp256k1 (if Zabi insufficient)
+- **Alternative secp256k1:** zig-eth-secp256k1 (if evmts/voltaire insufficient)
 
 **Database (Derived State):**
 
@@ -1144,7 +1144,7 @@ Alice ←═══════════ Virtual Channel ═══════
 
 **Ethereum Integration:**
 
-- **RPC Client:** Zabi HTTP client or custom via http.zig
+- **RPC Client:** evmts/voltaire HTTP client or custom via http.zig
   - JSON-RPC 2.0
   - WebSocket subscriptions for events
 - **Contract Bindings:** Code-gen from ABI (similar to abigen)
@@ -1155,7 +1155,7 @@ Alice ←═══════════ Virtual Channel ═══════
 
 - **JSON:** std.json (built-in)
 - **MessagePack:** msgpack.zig for compact binary (optional)
-- **ABI:** Zabi ABI encoder
+- **ABI:** evmts/voltaire ABI encoder
 
 **Storage (Event Store):**
 
@@ -1185,10 +1185,8 @@ Alice ←═══════════ Virtual Channel ═══════
     .name = "state-channels",
     .version = "0.1.0",
     .dependencies = .{
-        .zabi = .{
-            .url = "https://github.com/Raiden1411/zabi/archive/refs/tags/v0.18.0.tar.gz",
-            .hash = "...",
-        },
+        // Note: evmts/voltaire is TypeScript-based, integration TBD
+        // May need WASM bindings or alternative Zig-native implementation
         .@"http.zig" = .{
             .url = "https://github.com/karlseguin/http.zig/archive/refs/tags/v0.1.0.tar.gz",
             .hash = "...",
@@ -2419,7 +2417,7 @@ We adopt a rigorous development methodology:
 2. **State & signature handling**
 
    - State structure (op-stack compatible)
-   - secp256k1 signing/verification (via Zabi)
+   - secp256k1 signing/verification (via evmts/voltaire)
    - ABI encoding for hashing
 
 3. **P2P networking (basic)**
@@ -3126,10 +3124,11 @@ Events include `event_version` field (currently `1`) for schema evolution. Forwa
 - **pg.zig:** https://github.com/karlseguin/pg.zig
   - Native Zig PostgreSQL client
 
-### Zig Libraries
+### Ethereum Libraries
 
-- **Zabi:** https://github.com/Raiden1411/zabi
+- **evmts/voltaire:** TypeScript-based Ethereum utilities
   - Ethereum ABI encoding, secp256k1, Keccak256
+  - May require WASM bindings or Zig interop layer
 - **http.zig:** https://github.com/karlseguin/http.zig
   - High-performance HTTP server
 - **zig-libp2p:** https://github.com/zen-eth/zig-libp2p

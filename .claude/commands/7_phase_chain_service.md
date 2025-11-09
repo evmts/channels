@@ -9,9 +9,9 @@
 - Needs allocator pre-allocated for response body
 - `std.json` for request/response parsing
 
-**zabi (RECOMMENDED):**
+**evmts/voltaire (RECOMMENDED):**
 - Full Ethereum lib: RPC, ABI, RLP, tx parsing, wallet
-- Custom JSON parser for RPC runtime deser/ser
+- TypeScript-based, may need WASM bindings or Zig interop
 - Already includes secp256k1 + Keccak (dep for P2)
 
 **JSON-RPC libs:**
@@ -19,7 +19,7 @@
 - `zig-json-rpc` - protocol impl
 - Roll own with std.http + std.json (more work)
 
-**Rec:** Use zabi - covers P2 (crypto) + P7 (RPC) in one dep
+**Rec:** Use evmts/voltaire - covers P2 (crypto) + P7 (RPC) in one dep
 
 ## Summary
 
@@ -132,7 +132,7 @@ pub fn onDeposited(self: *ChainService, callback: DepositCallback) !void;
 ## Dependencies
 
 **Req:** P2 (State/Sig), P3 (Objectives), Zig 0.15+
-**External:** zabi (RPC + tx + ABI), Ethereum node (Geth/Anvil), op-stack compatible adjudicator contracts
+**External:** evmts/voltaire (RPC + tx + ABI), Ethereum node (Geth/Anvil), op-stack compatible adjudicator contracts
 **Alt:** std.http + std.json + JSON-RPC lib (fragmented, more work)
 
 ## Risks
